@@ -6,12 +6,14 @@
 import SwiftUI
 
 struct DividerTileView: View {
+    private static let lineVerticalInset: CGFloat = 15
+
     var body: some View {
         Rectangle()
             .fill(.primary.opacity(0.2))
             .frame(width: 1)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
+            .padding(.vertical, Self.lineVerticalInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .background {
                 ContextActionMenuPresenter { _ in

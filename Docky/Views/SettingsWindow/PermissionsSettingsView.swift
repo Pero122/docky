@@ -10,7 +10,6 @@ struct PermissionsSettingsView: View {
 
     var body: some View {
         Form {
-            permissionSection(for: .dockSettings)
             permissionSection(for: .userFolders)
             permissionSection(for: .finderAutomation)
 
@@ -43,18 +42,12 @@ struct PermissionsSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 12) {
-                if !AppEnvironment.isSandboxed || permission == .finderAutomation {
-                    Button("Open System Settings") {
-                        service.openSystemSettings(for: permission)
-                    }
+                Button("Open System Settings") {
+                    service.openSystemSettings(for: permission)
                 }
 
-                requestButton(for: permission)
-
-                if canRevokeUserSelectedFile(for: permission) {
-                    Button("Revoke") {
-                        service.revokeUserSelectedFile(for: permission)
-                    }
+                if permission == .finderAutomation {
+                    requestButton(for: permission)
                 }
 
                 if permission == .finderAutomation, service.finderAutomation != .notDetermined {
@@ -68,12 +61,7 @@ struct PermissionsSettingsView: View {
 
     @ViewBuilder
     private func requestButton(for permission: Permission) -> some View {
-        switch permission {
-        case .dockSettings, .userFolders:
-            Button(buttonTitle(for: permission)) {
-                _ = service.requestUserSelectedFile(for: permission)
-            }
-        case .finderAutomation:
+        if permission == .finderAutomation {
             Button(buttonTitle(for: permission)) {
                 Task {
                     _ = await service.requestAutomationPermission(for: permission)
@@ -101,7 +89,6 @@ struct PermissionsSettingsView: View {
     private func grantMethodText(for permission: Permission) -> String? {
         switch grantMethod(for: permission) {
         case .fullDiskAccess: return "Full Disk Access"
-        case .userSelectedFile: return permission == .dockSettings ? "User-selected file" : "User-selected folder"
         case .automation: return "Automation"
         case .none: return nil
         }
@@ -109,8 +96,6 @@ struct PermissionsSettingsView: View {
 
     private func grantMethod(for permission: Permission) -> GrantMethod? {
         switch permission {
-        case .dockSettings:
-            return service.dockSettingsGrantMethod
         case .userFolders:
             return service.userFoldersGrantMethod
         case .finderAutomation:
@@ -118,14 +103,9 @@ struct PermissionsSettingsView: View {
         }
     }
 
-    private func canRevokeUserSelectedFile(for permission: Permission) -> Bool {
-        grantMethod(for: permission) == .userSelectedFile
-    }
-
     private func buttonTitle(for permission: Permission) -> String {
         switch permission {
-        case .dockSettings: return "Select Dock Plist..."
-        case .userFolders: return "Select Home Folder..."
+        case .userFolders: return "Open System Settings"
         case .finderAutomation: return "Request Finder Access"
         }
     }

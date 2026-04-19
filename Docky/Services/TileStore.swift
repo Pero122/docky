@@ -7,8 +7,7 @@
 //    - running apps that aren't pinned → injected between pinned and folders
 //    - `persistent-others` → folders + spacers (right section)
 //
-//  Refresh signals: dock plist change (distributed notification + sandbox
-//  file watcher) and workspace running-apps changes.
+//  Refresh signals: dock plist change and workspace running-apps changes.
 //
 
 import AppKit
@@ -29,8 +28,6 @@ final class TileStore: ObservableObject {
     private var displayedRunning: [RunningApp] = []
 
     private var notificationObserver: NSObjectProtocol?
-    private var fileWatcher: DispatchSourceFileSystemObject?
-    private var watchedFileDescriptor: CInt?
     private var cancellables: Set<AnyCancellable> = []
 
     private init() {
@@ -42,13 +39,6 @@ final class TileStore: ObservableObject {
         ) { [weak self] _ in
             self?.refresh()
         }
-        PermissionsService.shared.$dockPlistURL
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] url in
-                self?.refresh()
-                self?.updateFileWatcher(for: url)
-            }
-            .store(in: &cancellables)
         WorkspaceService.shared.$runningApps
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.rebuildTiles() }
@@ -59,7 +49,6 @@ final class TileStore: ObservableObject {
         if let notificationObserver {
             DistributedNotificationCenter.default().removeObserver(notificationObserver)
         }
-        stopFileWatcher()
     }
 
     func refresh() {
@@ -238,42 +227,5 @@ final class TileStore: ObservableObject {
                 displayName: app.localizedName
             ))
         )
-    }
-
-    // MARK: - File watcher (sandbox fallback)
-
-    private func updateFileWatcher(for url: URL?) {
-        stopFileWatcher()
-        guard AppEnvironment.isSandboxed, url != nil else { return }
-        PermissionsService.shared.withDockPlistURL { scopedURL in
-            guard let scopedURL else { return }
-            let fd = open(scopedURL.path, O_EVTONLY)
-            guard fd >= 0 else { return }
-            let source = DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: fd,
-                eventMask: [.write, .extend, .attrib, .rename, .delete],
-                queue: .main
-            )
-            source.setEventHandler { [weak self] in
-                guard let self else { return }
-                let mask = source.data
-                self.refresh()
-                if mask.contains(.delete) || mask.contains(.rename) {
-                    self.updateFileWatcher(for: PermissionsService.shared.dockPlistURL)
-                }
-            }
-            source.setCancelHandler {
-                close(fd)
-            }
-            watchedFileDescriptor = fd
-            fileWatcher = source
-            source.resume()
-        }
-    }
-
-    private func stopFileWatcher() {
-        fileWatcher?.cancel()
-        fileWatcher = nil
-        watchedFileDescriptor = nil
     }
 }

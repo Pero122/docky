@@ -77,6 +77,23 @@ final class WorkspaceService: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([appURL])
     }
 
+    func showAllWindows(bundleIdentifier: String) {
+        guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first else {
+            return
+        }
+
+        runningApp.unhide()
+        runningApp.activate(options: [.activateAllWindows])
+    }
+
+    func hide(bundleIdentifier: String) {
+        guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first else {
+            return
+        }
+
+        runningApp.hide()
+    }
+
     func quit(bundleIdentifier: String, force: Bool = false) {
         guard let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first else {
             return

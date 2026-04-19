@@ -9,6 +9,7 @@ import SwiftUI
 struct ContextAction: Identifiable {
     enum Kind {
         case action
+        case submenu
         case divider
     }
 
@@ -16,22 +17,59 @@ struct ContextAction: Identifiable {
     let kind: Kind
     let title: String
     let isDestructive: Bool
+    let isOn: Bool
+    let children: [ContextAction]
     let handler: () -> Void
 
-    static func action(_ title: String, isDestructive: Bool = false, handler: @escaping () -> Void) -> Self {
-        Self(kind: .action, title: title, isDestructive: isDestructive, handler: handler)
+    static func action(
+        _ title: String,
+        isDestructive: Bool = false,
+        isOn: Bool = false,
+        handler: @escaping () -> Void
+    ) -> Self {
+        Self(
+            kind: .action,
+            title: title,
+            isDestructive: isDestructive,
+            isOn: isOn,
+            children: [],
+            handler: handler
+        )
+    }
+
+    static func submenu(_ title: String, children: [ContextAction]) -> Self {
+        Self(
+            kind: .submenu,
+            title: title,
+            isDestructive: false,
+            isOn: false,
+            children: children,
+            handler: {}
+        )
     }
 
     static var divider: Self {
-        Self(kind: .divider, title: "", isDestructive: false, handler: {})
+        Self(kind: .divider, title: "", isDestructive: false, isOn: false, children: [], handler: {})
     }
 }
 
 struct ContextActionMenuPresenter: NSViewRepresentable {
     let actionProvider: (NSEvent.ModifierFlags) -> [ContextAction]
+    let onPresentationChanged: (Bool) -> Void
+
+    init(
+        actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+        onPresentationChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.actionProvider = actionProvider
+        self.onPresentationChanged = onPresentationChanged
+    }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(actionProvider: actionProvider)
+        Coordinator(
+            actionProvider: actionProvider,
+            onPresentationChanged: onPresentationChanged
+        )
     }
 
     func makeNSView(context: Context) -> AnchorView {
@@ -39,7 +77,10 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: AnchorView, context: Context) {
-        context.coordinator.update(actionProvider: actionProvider)
+        context.coordinator.update(
+            actionProvider: actionProvider,
+            onPresentationChanged: onPresentationChanged
+        )
         DispatchQueue.main.async {
             context.coordinator.installIfNeeded(for: nsView)
         }
@@ -53,14 +94,23 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         private weak var anchorView: NSView?
         private var eventMonitor: Any?
         private var actionProvider: (NSEvent.ModifierFlags) -> [ContextAction]
+        private var onPresentationChanged: (Bool) -> Void
 
-        init(actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction]) {
+        init(
+            actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+            onPresentationChanged: @escaping (Bool) -> Void
+        ) {
             self.actionProvider = actionProvider
+            self.onPresentationChanged = onPresentationChanged
             super.init()
         }
 
-        func update(actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction]) {
+        func update(
+            actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+            onPresentationChanged: @escaping (Bool) -> Void
+        ) {
             self.actionProvider = actionProvider
+            self.onPresentationChanged = onPresentationChanged
         }
 
         func installIfNeeded(for anchorView: NSView) {
@@ -113,6 +163,9 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         }
 
         private func popUpCartouche(menu: NSMenu, in view: NSView) {
+            onPresentationChanged(true)
+            defer { onPresentationChanged(false) }
+
             let selector = NSSelectorFromString("_popUpMenuRelativeToRect:inView:preferredEdge:")
             if menu.responds(to: selector) {
                 typealias Fn = @convention(c) (NSMenu, Selector, NSRect, NSView?, NSRectEdge) -> Void
@@ -138,12 +191,17 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
                     let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
                     item.target = self
                     item.representedObject = action
+                    item.state = action.isOn ? .on : .off
                     if action.isDestructive {
                         item.attributedTitle = NSAttributedString(
                             string: action.title,
                             attributes: [.foregroundColor: NSColor.systemRed]
                         )
                     }
+                    menu.addItem(item)
+                case .submenu:
+                    let item = NSMenuItem(title: action.title, action: nil, keyEquivalent: "")
+                    item.submenu = buildMenu(actions: action.children)
                     menu.addItem(item)
                 case .divider:
                     menu.addItem(.separator())

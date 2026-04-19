@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct GeneralSettingsView: View {
+    @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
 
     var body: some View {
@@ -35,15 +36,15 @@ struct GeneralSettingsView: View {
                         .font(.headline)
 
                     HStack {
-                        Slider(value: $preferences.windowCornerRadius, in: 0...24, step: 1) {
+                        Slider(value: windowCornerRadiusBinding, in: 0...maximumCornerRadius, step: 1) {
                             Text("Window Corner Radius")
                         }
-                        Text("\(Int(preferences.windowCornerRadius)) pt")
+                        Text("\(Int(min(preferences.windowCornerRadius, maximumCornerRadius))) pt")
                             .foregroundStyle(.secondary)
                             .frame(width: 48, alignment: .trailing)
                     }
 
-                    Text("Controls the roundness of the main dock window and its border.")
+                    Text("Controls the roundness of the main dock window and its border, up to a full capsule.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -77,5 +78,17 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .padding(.horizontal, 20)
+    }
+
+    private var maximumCornerRadius: CGFloat {
+        let iconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
+        return (iconHeight + preferences.tileVerticalPadding * 2) / 2
+    }
+
+    private var windowCornerRadiusBinding: Binding<CGFloat> {
+        Binding(
+            get: { min(preferences.windowCornerRadius, maximumCornerRadius) },
+            set: { preferences.windowCornerRadius = $0 }
+        )
     }
 }

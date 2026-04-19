@@ -3,9 +3,8 @@
 //  Docky
 //
 //  Reads folder contents for preview tiles. Relies on the .userFolders
-//  permission granted via PermissionsService — either FDA (unsandboxed) or
-//  a home-folder security-scoped bookmark (sandboxed). Silent no-op when
-//  access isn't granted.
+//  permission granted via Full Disk Access. Silent no-op when access isn't
+//  granted.
 //
 
 import Foundation
@@ -47,21 +46,16 @@ final class FolderAccessService {
             return .loaded(cached.items)
         }
 
-        let loaded: [URL]? = PermissionsService.shared.withUserFoldersAccess {
-            guard FileManager.default.isReadableFile(atPath: folderURL.path) else {
-                return nil
-            }
-
-            let keys: [URLResourceKey] = [.contentModificationDateKey]
-            guard let items = try? FileManager.default.contentsOfDirectory(
-                at: folderURL,
-                includingPropertiesForKeys: keys,
-                options: [.skipsHiddenFiles]
-            ) else { return nil }
-            return items.sorted { Self.modDate($0) > Self.modDate($1) }
+        guard FileManager.default.isReadableFile(atPath: folderURL.path) else {
+            return .unreadable
         }
 
-        guard let loaded else {
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let loaded = try? FileManager.default.contentsOfDirectory(
+            at: folderURL,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ).sorted(by: { Self.modDate($0) > Self.modDate($1) }) else {
             return .unreadable
         }
 

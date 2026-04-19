@@ -82,7 +82,7 @@ struct FolderTileView: View {
     }
 
     private var reloadKey: String {
-        "\(tile.url.path)|\(permissions.userFolders)|\(permissions.userFoldersURL?.path ?? "")"
+        "\(tile.url.path)|\(permissions.userFolders)"
     }
 }
 

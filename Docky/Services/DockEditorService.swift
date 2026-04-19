@@ -17,28 +17,41 @@ final class DockEditorService {
 
     @discardableResult
     func removePinnedApp(bundleIdentifier: String) -> Bool {
+        setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: false)
+    }
+
+    @discardableResult
+    func setPinnedApp(bundleIdentifier: String, pinned: Bool) -> Bool {
         guard !bundleIdentifier.isEmpty, bundleIdentifier != Self.finderBundleIdentifier else {
             return false
         }
 
-        let removed = updateDockPlist { plist in
+        let updated = updateDockPlist { plist in
             guard var apps = plist["persistent-apps"] as? [[String: Any]] else {
                 return false
             }
 
-            let originalCount = apps.count
-            apps.removeAll { entry in
+            let existingIndex = apps.firstIndex { entry in
                 pinnedAppBundleIdentifier(in: entry) == bundleIdentifier
             }
-            guard apps.count != originalCount else {
-                return false
+
+            if pinned {
+                guard existingIndex == nil, let entry = makePinnedAppEntry(bundleIdentifier: bundleIdentifier, plist: plist) else {
+                    return false
+                }
+                apps.append(entry)
+            } else {
+                guard let existingIndex else {
+                    return false
+                }
+                apps.remove(at: existingIndex)
             }
 
             plist["persistent-apps"] = apps
             return true
         }
 
-        guard removed else {
+        guard updated else {
             return false
         }
 
@@ -48,18 +61,7 @@ final class DockEditorService {
     }
 
     private func updateDockPlist(_ mutate: (inout [String: Any]) -> Bool) -> Bool {
-        if let updated = PermissionsService.shared.withDockPlistURL({ url -> Bool? in
-            guard let url else { return nil }
-            return updateDockPlist(at: url, mutate)
-        }) {
-            return updated
-        }
-
-        guard !AppEnvironment.isSandboxed else {
-            return false
-        }
-
-        let url = URL(fileURLWithPath: NSHomeDirectory())
+        let url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Preferences")
             .appendingPathComponent(Self.dockPlistFilename)
         return updateDockPlist(at: url, mutate)
@@ -116,5 +118,55 @@ final class DockEditorService {
 
         return (tileData?["bundle-identifier"] as? String)
             ?? url.flatMap { Bundle(url: $0)?.bundleIdentifier }
+    }
+
+    private func makePinnedAppEntry(bundleIdentifier: String, plist: [String: Any]) -> [String: Any]? {
+        if let recentApps = plist["recent-apps"] as? [[String: Any]],
+           let existing = recentApps.first(where: { pinnedAppBundleIdentifier(in: $0) == bundleIdentifier }) {
+            var copied = existing
+            copied["GUID"] = NSNumber(value: Int.random(in: 1...Int(UInt32.max)))
+            return copied
+        }
+
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return nil
+        }
+
+        let label = FileManager.default.displayName(atPath: appURL.path)
+        let fileData: [String: Any] = [
+            "_CFURLString": appURL.absoluteString,
+            "_CFURLStringType": 15
+        ]
+
+        var tileData: [String: Any] = [
+            "bundle-identifier": bundleIdentifier,
+            "dock-extra": false,
+            "file-data": fileData,
+            "file-label": label,
+            "is-beta": false
+        ]
+
+        if let bookmark = try? appURL.bookmarkData() {
+            tileData["book"] = bookmark
+        }
+
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: appURL.path),
+           let modificationDate = attributes[.modificationDate] as? Date {
+            let modValue = plistDateValue(modificationDate)
+            tileData["file-mod-date"] = modValue
+            tileData["parent-mod-date"] = modValue
+        }
+
+        tileData["file-type"] = 1
+
+        return [
+            "GUID": NSNumber(value: Int.random(in: 1...Int(UInt32.max))),
+            "tile-data": tileData,
+            "tile-type": "file-tile"
+        ]
+    }
+
+    private func plistDateValue(_ date: Date) -> NSNumber {
+        NSNumber(value: Int64(date.timeIntervalSinceReferenceDate * 1_000_000))
     }
 }

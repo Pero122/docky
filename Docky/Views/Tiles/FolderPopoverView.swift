@@ -123,14 +123,11 @@ struct FolderPopoverView: View {
     }
 
     private var reloadKey: String {
-        "\(tile.url.path)|\(permissions.userFolders)|\(permissions.userFoldersURL?.path ?? "")|\(isPresented)"
+        "\(tile.url.path)|\(permissions.userFolders)|\(isPresented)"
     }
 
     private func open(_ itemURL: URL) {
-        let opened = permissions.withUserFoldersAccess {
-            NSWorkspace.shared.open(itemURL)
-        }
-
+        let opened = NSWorkspace.shared.open(itemURL)
         if opened {
             isPresented = false
         }

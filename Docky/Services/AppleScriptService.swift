@@ -3,9 +3,7 @@
 //  Docky
 //
 //  Finder-backed actions that are awkward or unavailable via NSWorkspace
-//  alone. The sandboxed build relies on the app's Apple Events entitlement
-//  and executes the script source directly, which avoids writing into the
-//  Application Scripts container at runtime.
+//  alone. Scripts are executed directly from source at runtime.
 //
 
 import AppKit

@@ -12,8 +12,10 @@ import SwiftUI
 struct TileView: View {
     let tile: Tile
     @ObservedObject private var preferences = DockyPreferences.shared
+    @State private var isHovering = false
     @State private var isTooltipPresented = false
     @State private var isFolderPopoverPresented = false
+    @State private var isContextMenuPresented = false
     @State private var folderSnapshot: FolderContentsSnapshot = .loaded([])
 
     private static let finderBundleIdentifier = "com.apple.finder"
@@ -56,17 +58,22 @@ struct TileView: View {
 
     var body: some View {
         content
-            .padding(.vertical, preferences.tileVerticalPadding)
+            .padding(.vertical, verticalPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .contentShape(Rectangle())
-            .onHover(perform: updateTooltip)
+            .onHover(perform: updateHoverState)
             .onTapGesture(perform: handleTap)
             .onDisappear {
+                isHovering = false
                 isTooltipPresented = false
                 isFolderPopoverPresented = false
+                isContextMenuPresented = false
             }
             .background {
-                ContextActionMenuPresenter(actionProvider: contextActions(modifierFlags:))
+                ContextActionMenuPresenter(
+                    actionProvider: contextActions(modifierFlags:),
+                    onPresentationChanged: updateContextMenuPresentation
+                )
 
                 if let tooltipTitle {
                     TileTooltipPopoverPresenter(
@@ -89,6 +96,15 @@ struct TileView: View {
                     )
                 }
             }
+    }
+
+    private var verticalPadding: CGFloat {
+        switch tile.content {
+        case .divider:
+            0
+        default:
+            preferences.tileVerticalPadding
+        }
     }
 
     @ViewBuilder
@@ -124,8 +140,21 @@ struct TileView: View {
         }
     }
 
-    private func updateTooltip(isHovering: Bool) {
-        isTooltipPresented = isHovering && tooltipTitle != nil && !isFolderPopoverPresented
+    private func updateHoverState(isHovering: Bool) {
+        self.isHovering = isHovering
+        updateTooltipPresentation()
+    }
+
+    private func updateContextMenuPresentation(isPresented: Bool) {
+        isContextMenuPresented = isPresented
+        updateTooltipPresentation()
+    }
+
+    private func updateTooltipPresentation() {
+        isTooltipPresented = isHovering
+            && tooltipTitle != nil
+            && !isFolderPopoverPresented
+            && !isContextMenuPresented
     }
 
     private func handleTap() {
@@ -144,6 +173,7 @@ struct TileView: View {
             folderSnapshot = FolderAccessService.shared.snapshot(of: folder.url)
             isFolderPopoverPresented = true
         case .trash:
+            isTooltipPresented = false
             Task {
                 _ = await AppleScriptService.shared.openTrash()
             }
@@ -163,26 +193,28 @@ struct TileView: View {
         let workspace = WorkspaceService.shared
         let isRunning = workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
         let isPinned = tile.id.hasPrefix("pinned:")
-        let canRemoveFromDock = isPinned && app.bundleIdentifier != Self.finderBundleIdentifier
+        let canTogglePinned = app.bundleIdentifier != Self.finderBundleIdentifier
         let useForceQuit = modifierFlags.contains(.option)
         var actions: [ContextAction] = [
             .action("Open") {
                 workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
-            },
-            .action("Show in Finder") {
-                workspace.revealApplicationInFinder(bundleIdentifier: app.bundleIdentifier)
             }
         ]
 
-        if canRemoveFromDock {
-            actions.append(.divider)
-            actions.append(.action("Remove from Dock") {
-                _ = DockEditorService.shared.removePinnedApp(bundleIdentifier: app.bundleIdentifier)
+        if isRunning {
+            actions.append(.action("Show All Windows") {
+                workspace.showAllWindows(bundleIdentifier: app.bundleIdentifier)
             })
         }
 
+        actions.append(.divider)
+        actions.append(.submenu("Options", children: appOptionsActions(for: app, isPinned: isPinned, canTogglePinned: canTogglePinned)))
+
         if isRunning && app.bundleIdentifier != Self.finderBundleIdentifier {
             actions.append(.divider)
+            actions.append(.action("Hide") {
+                workspace.hide(bundleIdentifier: app.bundleIdentifier)
+            })
             actions.append(.action(
                 useForceQuit ? "Force Quit" : "Quit",
                 isDestructive: useForceQuit
@@ -190,6 +222,29 @@ struct TileView: View {
                 workspace.quit(bundleIdentifier: app.bundleIdentifier, force: useForceQuit)
             })
         }
+
+        return actions
+    }
+
+    private func appOptionsActions(
+        for app: AppTile,
+        isPinned: Bool,
+        canTogglePinned: Bool
+    ) -> [ContextAction] {
+        var actions: [ContextAction] = []
+
+        if canTogglePinned {
+            actions.append(.action("Keep in Dock", isOn: isPinned) {
+                _ = DockEditorService.shared.setPinnedApp(
+                    bundleIdentifier: app.bundleIdentifier,
+                    pinned: !isPinned
+                )
+            })
+        }
+
+        actions.append(.action("Show in Finder") {
+            WorkspaceService.shared.revealApplicationInFinder(bundleIdentifier: app.bundleIdentifier)
+        })
 
         return actions
     }

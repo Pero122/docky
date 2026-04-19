@@ -24,7 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if PermissionsService.shared.setupComplete {
             showMainWindow()
         } else {
-            showPermissionsWindow(steps: Permission.allCases)
+            showPermissionsWindow(steps: PermissionsService.shared.setupPermissions)
         }
     }
 

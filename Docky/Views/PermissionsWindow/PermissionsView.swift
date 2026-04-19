@@ -69,18 +69,11 @@ struct PermissionsView: View {
     @ViewBuilder
     private var grantActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !AppEnvironment.isSandboxed || step == .finderAutomation {
-                Button(systemSettingsButtonTitle) {
-                    service.openSystemSettings(for: step)
-                }
+            Button(systemSettingsButtonTitle) {
+                service.openSystemSettings(for: step)
             }
-            requestButton
-            if status == .granted, grantMethod == .userSelectedFile {
-                Button("Revoke file access") {
-                    service.revokeUserSelectedFile(for: step)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
+            if step == .finderAutomation {
+                requestButton
             }
         }
     }
@@ -99,8 +92,6 @@ struct PermissionsView: View {
     private var grantMethodLabel: String? {
         switch grantMethod {
         case .fullDiskAccess: return "Full Disk Access"
-        case .userSelectedFile:
-            return step == .dockSettings ? "User-selected file" : "User-selected folder"
         case .automation: return "Automation"
         case .none: return nil
         }
@@ -108,16 +99,7 @@ struct PermissionsView: View {
 
     @ViewBuilder
     private var requestButton: some View {
-        switch step {
-        case .dockSettings:
-            Button("Select com.apple.dock.plist…") {
-                _ = service.requestUserSelectedFile(for: step)
-            }
-        case .userFolders:
-            Button("Select Home Folder…") {
-                _ = service.requestUserSelectedFile(for: step)
-            }
-        case .finderAutomation:
+        if step == .finderAutomation {
             Button("Request Finder Access") {
                 Task {
                     _ = await service.requestAutomationPermission(for: step)
@@ -128,8 +110,6 @@ struct PermissionsView: View {
 
     private var grantMethod: GrantMethod? {
         switch step {
-        case .dockSettings:
-            return service.dockSettingsGrantMethod
         case .userFolders:
             return service.userFoldersGrantMethod
         case .finderAutomation:
@@ -141,7 +121,7 @@ struct PermissionsView: View {
         switch step {
         case .finderAutomation:
             return "Open System Settings (Automation)"
-        case .dockSettings, .userFolders:
+        case .userFolders:
             return "Open System Settings (Full Disk Access)"
         }
     }
