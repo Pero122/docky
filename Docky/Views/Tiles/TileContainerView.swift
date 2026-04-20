@@ -8,6 +8,7 @@ import SwiftUI
 struct TileContainerView: View {
     static let edgePadding: CGFloat = 8
     static let dividerWidth: CGFloat = 40
+    private let tileMutationAnimation: Animation = .easeInOut(duration: 0.18)
 
     @ObservedObject private var store = TileStore.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
@@ -28,6 +29,7 @@ struct TileContainerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(tileMutationAnimation, value: store.tiles)
     }
 
     @ViewBuilder
@@ -36,6 +38,27 @@ struct TileContainerView: View {
             let size = Self.size(for: tile, tileSize: dockSettings.tileSize, tileHeight: tileHeight, position: position)
             TileView(tile: tile)
                 .frame(width: size.width, height: size.height)
+                .transition(tileTransition)
+        }
+    }
+
+    private var tileTransition: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.9, anchor: tileScaleAnchor).combined(with: .opacity),
+            removal: .scale(scale: 0.9, anchor: tileScaleAnchor).combined(with: .opacity)
+        )
+    }
+
+    private var tileScaleAnchor: UnitPoint {
+        switch position {
+        case .top:
+            .top
+        case .left:
+            .leading
+        case .right:
+            .trailing
+        case .bottom:
+            .bottom
         }
     }
 

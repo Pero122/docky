@@ -80,6 +80,7 @@ final class MainWindow: NSWindow {
     private let backgroundBlurRadius = 10
     private let hiddenRevealThickness: CGFloat = 2
     private let baseAutohideAnimationDuration: TimeInterval = 0.12
+    private let tileMutationAnimationDuration: TimeInterval = 0.18
     private let dockSettings = DockSettingsService.shared
     private let preferences = DockyPreferences.shared
     private let tileStore = TileStore.shared
@@ -115,7 +116,7 @@ final class MainWindow: NSWindow {
     }
 
     private func observeFrameInputs() {
-        let signals: [AnyPublisher<Void, Never>] = [
+        let layoutSignals: [AnyPublisher<Void, Never>] = [
             dockSettings.$orientation.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$tileSize.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$largeSize.map { _ in () }.eraseToAnyPublisher(),
@@ -123,11 +124,17 @@ final class MainWindow: NSWindow {
             preferences.$tileVerticalPadding.map { _ in () }.eraseToAnyPublisher(),
             preferences.$tileSpacing.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowPosition.map { _ in () }.eraseToAnyPublisher(),
-            tileStore.$tiles.map { _ in () }.eraseToAnyPublisher(),
         ]
-        Publishers.MergeMany(signals)
+        Publishers.MergeMany(layoutSignals)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyCurrentFrame(animated: false) }
+            .store(in: &cancellables)
+
+        tileStore.$tiles
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyCurrentFrame(animated: true, duration: self?.tileMutationAnimationDuration) }
             .store(in: &cancellables)
     }
 
@@ -206,6 +213,10 @@ final class MainWindow: NSWindow {
     }
 
     private func applyCurrentFrame(animated: Bool) {
+        applyCurrentFrame(animated: animated, duration: nil)
+    }
+
+    private func applyCurrentFrame(animated: Bool, duration: TimeInterval?) {
         let screenBounds = screen?.frame ?? NSScreen.main?.frame ?? .zero
         let iconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
         let contentPadding = MainWindowContainerView.contentPadding
@@ -230,17 +241,17 @@ final class MainWindow: NSWindow {
         )
 
         let frame = CGRect(origin: origin, size: size)
-        applyFrame(frame, animated: animated)
+        applyFrame(frame, animated: animated, duration: duration)
     }
 
-    private func applyFrame(_ frame: CGRect, animated: Bool) {
+    private func applyFrame(_ frame: CGRect, animated: Bool, duration: TimeInterval?) {
         guard animated else {
             setFrame(frame, display: true, animate: false)
             return
         }
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = autohideAnimationDuration
+            context.duration = duration ?? autohideAnimationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             animator().setFrame(frame, display: true)
         }
