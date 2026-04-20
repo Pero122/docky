@@ -12,6 +12,7 @@ final class MainWindowContainerView: NSView {
     static let contentPadding: CGFloat = 2
 
     private let contentView = MainWindowView()
+    private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -36,6 +37,33 @@ final class MainWindowContainerView: NSView {
             contentView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.contentPadding),
         ])
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        self.trackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        (window as? MainWindow)?.pointerDidEnterWindow()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        (window as? MainWindow)?.pointerDidExitWindow()
+    }
 }
 
 final class MainWindow: NSWindow {
@@ -44,19 +72,32 @@ final class MainWindow: NSWindow {
 
     override var level: NSWindow.Level { get { .mainMenu } set {} }
 
+    private enum VisibilityState {
+        case visible
+        case hidden
+    }
+
     private let backgroundBlurRadius = 10
+    private let hiddenRevealThickness: CGFloat = 2
+    private let baseAutohideAnimationDuration: TimeInterval = 0.12
     private let dockSettings = DockSettingsService.shared
     private let preferences = DockyPreferences.shared
     private let tileStore = TileStore.shared
     private let minimumWidth: CGFloat = 120
     private var cancellables: Set<AnyCancellable> = []
+    private var hideWorkItem: DispatchWorkItem?
+    private var isPointerInsideWindow = false
+    private var activeInteractionCount = 0
+    private var visibilityState: VisibilityState
 
     override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing backingStoreType: NSWindow.BackingStoreType, defer flag: Bool) {
+        visibilityState = DockyPreferences.shared.autohidesWindow ? .hidden : .visible
         super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
         backgroundColor = .clear
         isOpaque = false
         isMovableByWindowBackground = true
         observeFrameInputs()
+        observeVisibilityInputs()
     }
 
     override func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
@@ -86,11 +127,85 @@ final class MainWindow: NSWindow {
         ]
         Publishers.MergeMany(signals)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyFrame() }
+            .sink { [weak self] _ in self?.applyCurrentFrame(animated: false) }
             .store(in: &cancellables)
     }
 
-    private func applyFrame() {
+    private func observeVisibilityInputs() {
+        preferences.$autohidesWindow
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] autohidesWindow in
+                self?.handleAutohideChanged(autohidesWindow)
+            }
+            .store(in: &cancellables)
+    }
+
+    func pointerDidEnterWindow() {
+        isPointerInsideWindow = true
+        hideWorkItem?.cancel()
+
+        guard preferences.autohidesWindow else { return }
+        setVisibility(.visible, animated: true)
+    }
+
+    func pointerDidExitWindow() {
+        isPointerInsideWindow = false
+        scheduleHideIfNeeded()
+    }
+
+    func beginInteraction() {
+        activeInteractionCount += 1
+        hideWorkItem?.cancel()
+
+        guard preferences.autohidesWindow else { return }
+        setVisibility(.visible, animated: true)
+    }
+
+    func endInteraction() {
+        activeInteractionCount = max(0, activeInteractionCount - 1)
+        scheduleHideIfNeeded()
+    }
+
+    private func handleAutohideChanged(_ autohidesWindow: Bool) {
+        hideWorkItem?.cancel()
+
+        if autohidesWindow {
+            let nextState: VisibilityState = shouldRemainVisible ? .visible : .hidden
+            setVisibility(nextState, animated: true)
+            return
+        }
+
+        setVisibility(.visible, animated: true)
+    }
+
+    private func scheduleHideIfNeeded() {
+        hideWorkItem?.cancel()
+
+        guard preferences.autohidesWindow, !shouldRemainVisible else { return }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, !self.shouldRemainVisible else { return }
+            self.setVisibility(.hidden, animated: true)
+        }
+        hideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + dockSettings.autohideDelay, execute: workItem)
+    }
+
+    private var shouldRemainVisible: Bool {
+        isPointerInsideWindow || activeInteractionCount > 0
+    }
+
+    private func setVisibility(_ state: VisibilityState, animated: Bool) {
+        guard visibilityState != state else {
+            applyCurrentFrame(animated: false)
+            return
+        }
+
+        visibilityState = state
+        applyCurrentFrame(animated: animated)
+    }
+
+    private func applyCurrentFrame(animated: Bool) {
         let screenBounds = screen?.frame ?? NSScreen.main?.frame ?? .zero
         let iconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
         let contentPadding = MainWindowContainerView.contentPadding
@@ -106,45 +221,63 @@ final class MainWindow: NSWindow {
         )
         let width = (position.isVertical ? contentSize.width : max(minimumWidth, contentSize.width)) + contentPadding * 2
         let height = contentSize.height + contentPadding * 2
-        let origin = frameOrigin(in: screenBounds, size: CGSize(width: width, height: height), position: position)
-
-        setFrame(
-            CGRect(
-                x: origin.x,
-                y: origin.y,
-                width: width,
-                height: height
-            ),
-            display: true,
-            animate: false
+        let size = CGSize(width: width, height: height)
+        let origin = frameOrigin(
+            in: screenBounds,
+            size: size,
+            position: position,
+            visibilityState: visibilityState
         )
+
+        let frame = CGRect(origin: origin, size: size)
+        applyFrame(frame, animated: animated)
+    }
+
+    private func applyFrame(_ frame: CGRect, animated: Bool) {
+        guard animated else {
+            setFrame(frame, display: true, animate: false)
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = autohideAnimationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animator().setFrame(frame, display: true)
+        }
+    }
+
+    private var autohideAnimationDuration: TimeInterval {
+        max(0.08, min(0.4, baseAutohideAnimationDuration * max(dockSettings.autohideTimeModifier, 0.01)))
     }
 
     private func frameOrigin(
         in screenBounds: CGRect,
         size: CGSize,
-        position: ResolvedDockWindowPosition
+        position: ResolvedDockWindowPosition,
+        visibilityState: VisibilityState
     ) -> CGPoint {
+        let hidden = visibilityState == .hidden
+
         switch position {
         case .top:
-            CGPoint(
+            return CGPoint(
                 x: screenBounds.minX + (screenBounds.width - size.width) / 2,
-                y: screenBounds.maxY - size.height
+                y: hidden ? screenBounds.maxY - hiddenRevealThickness : screenBounds.maxY - size.height
             )
         case .left:
-            CGPoint(
-                x: screenBounds.minX,
+            return CGPoint(
+                x: hidden ? screenBounds.minX - size.width + hiddenRevealThickness : screenBounds.minX,
                 y: screenBounds.minY + (screenBounds.height - size.height) / 2
             )
         case .right:
-            CGPoint(
-                x: screenBounds.maxX - size.width,
+            return CGPoint(
+                x: hidden ? screenBounds.maxX - hiddenRevealThickness : screenBounds.maxX - size.width,
                 y: screenBounds.minY + (screenBounds.height - size.height) / 2
             )
         case .bottom:
-            CGPoint(
+            return CGPoint(
                 x: screenBounds.minX + (screenBounds.width - size.width) / 2,
-                y: screenBounds.minY
+                y: hidden ? screenBounds.minY - size.height + hiddenRevealThickness : screenBounds.minY
             )
         }
     }

@@ -30,6 +30,16 @@ struct GeneralSettingsView: View {
                 .padding(.vertical, 4)
 
                 VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Autohide Window", isOn: $preferences.autohidesWindow)
+                        .font(.headline)
+
+                    Text("Slides Docky's window off-screen until the pointer reaches its edge. Reveal and hide timing still follows the system Dock settings.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Tile Vertical Padding")
                         .font(.headline)
 

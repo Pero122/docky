@@ -488,6 +488,8 @@ private struct FolderPopoverPresenter: NSViewRepresentable {
         private var isPresented: Binding<Bool>
         private var preferredEdge: NSRectEdge
         private var lastContentSize = NSSize(width: 320, height: 240)
+        private weak var anchorView: NSView?
+        private var isInterruptingAutohide = false
 
         init(
             tile: FolderTile,
@@ -530,19 +532,35 @@ private struct FolderPopoverPresenter: NSViewRepresentable {
 
         func show(relativeTo view: NSView) {
             guard view.window != nil, !popover.isShown else { return }
+            anchorView = view
+            beginAutohideInterruption(for: view)
             updateContentSize(lastContentSize)
             popover.show(relativeTo: anchorRect(in: view.bounds), of: view, preferredEdge: preferredEdge)
         }
 
         func close() {
+            endAutohideInterruption()
             popover.performClose(nil)
         }
 
         func popoverDidClose(_ notification: Notification) {
+            endAutohideInterruption()
             guard isPresented.wrappedValue else { return }
             DispatchQueue.main.async { [isPresented] in
                 isPresented.wrappedValue = false
             }
+        }
+
+        private func beginAutohideInterruption(for view: NSView) {
+            guard !isInterruptingAutohide else { return }
+            (view.window as? MainWindow)?.beginInteraction()
+            isInterruptingAutohide = true
+        }
+
+        private func endAutohideInterruption() {
+            guard isInterruptingAutohide else { return }
+            (anchorView?.window as? MainWindow)?.endInteraction()
+            isInterruptingAutohide = false
         }
 
         private func updateContentSize(_ size: CGSize) {

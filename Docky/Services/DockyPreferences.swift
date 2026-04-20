@@ -100,6 +100,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Whether Docky's main window should slide off-screen until revealed.
+    @Published var autohidesWindow: Bool {
+        didSet {
+            guard autohidesWindow != oldValue else { return }
+            defaults.set(autohidesWindow, forKey: Keys.autohidesWindow)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -107,6 +115,7 @@ final class DockyPreferences: ObservableObject {
         static let tileSpacing = "docky.tileSpacing"
         static let windowCornerRadius = "docky.windowCornerRadius"
         static let windowPosition = "docky.windowPosition"
+        static let autohidesWindow = "docky.autohidesWindow"
     }
 
     private enum DefaultValues {
@@ -114,6 +123,7 @@ final class DockyPreferences: ObservableObject {
         static let tileSpacing: CGFloat = 0
         static let windowCornerRadius: CGFloat = 24
         static let windowPosition: DockWindowPosition = .system
+        static let autohidesWindow = false
     }
 
     private init() {
@@ -122,10 +132,12 @@ final class DockyPreferences: ObservableObject {
         let storedTileSpacing = defaults.object(forKey: Keys.tileSpacing) as? Double
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
         let storedWindowPosition = defaults.string(forKey: Keys.windowPosition)
+        let storedAutohidesWindow = defaults.object(forKey: Keys.autohidesWindow) as? Bool
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
         self.windowPosition = (storedWindowPosition.flatMap(DockWindowPosition.init(rawValue:)) ?? DefaultValues.windowPosition)
+        self.autohidesWindow = storedAutohidesWindow ?? DefaultValues.autohidesWindow
     }
 
     func resetToDefaults() {
@@ -133,5 +145,6 @@ final class DockyPreferences: ObservableObject {
         tileSpacing = DefaultValues.tileSpacing
         windowCornerRadius = DefaultValues.windowCornerRadius
         windowPosition = DefaultValues.windowPosition
+        autohidesWindow = DefaultValues.autohidesWindow
     }
 }

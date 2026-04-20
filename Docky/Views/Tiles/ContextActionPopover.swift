@@ -101,6 +101,7 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         private var actionProvider: (NSEvent.ModifierFlags) -> [ContextAction]
         private var preferredEdge: NSRectEdge
         private var onPresentationChanged: (Bool) -> Void
+        private var isInterruptingAutohide = false
 
         init(
             actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
@@ -142,6 +143,7 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
                 NSEvent.removeMonitor(eventMonitor)
             }
 
+            endAutohideInterruption()
             eventMonitor = nil
             anchorView = nil
         }
@@ -175,6 +177,8 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         private func popUpCartouche(menu: NSMenu, in view: NSView) {
             onPresentationChanged(true)
             defer { onPresentationChanged(false) }
+            beginAutohideInterruption(for: view)
+            defer { endAutohideInterruption() }
 
             let selector = NSSelectorFromString("_popUpMenuRelativeToRect:inView:preferredEdge:")
             if menu.responds(to: selector) {
@@ -201,6 +205,18 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
                 anchor = NSPoint(x: anchorRect.midX - menu.size.width / 2, y: anchorRect.maxY)
             }
             menu.popUp(positioning: menu.items.last, at: anchor, in: view)
+        }
+
+        private func beginAutohideInterruption(for view: NSView) {
+            guard !isInterruptingAutohide else { return }
+            (view.window as? MainWindow)?.beginInteraction()
+            isInterruptingAutohide = true
+        }
+
+        private func endAutohideInterruption() {
+            guard isInterruptingAutohide else { return }
+            (anchorView?.window as? MainWindow)?.endInteraction()
+            isInterruptingAutohide = false
         }
 
         private func buildMenu(actions: [ContextAction]) -> NSMenu {
