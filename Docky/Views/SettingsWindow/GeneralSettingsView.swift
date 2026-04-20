@@ -13,6 +13,23 @@ struct GeneralSettingsView: View {
         Form {
             Section("Appearance") {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Window Position")
+                        .font(.headline)
+
+                    Picker("Window Position", selection: $preferences.windowPosition) {
+                        ForEach(DockWindowPosition.allCases) { position in
+                            Text(position.title).tag(position)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Choose where Docky sits on screen, or mirror the macOS Dock position.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Tile Vertical Padding")
                         .font(.headline)
 

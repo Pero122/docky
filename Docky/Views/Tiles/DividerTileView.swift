@@ -7,12 +7,11 @@ import SwiftUI
 
 struct DividerTileView: View {
     private static let lineVerticalInset: CGFloat = 15
+    @ObservedObject private var dockSettings = DockSettingsService.shared
+    @ObservedObject private var preferences = DockyPreferences.shared
 
     var body: some View {
-        Rectangle()
-            .fill(.primary.opacity(0.2))
-            .frame(width: 1)
-            .padding(.vertical, Self.lineVerticalInset)
+        divider
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
             .background {
@@ -28,5 +27,24 @@ struct DividerTileView: View {
                     ]
                 }
             }
+    }
+
+    @ViewBuilder
+    private var divider: some View {
+        if position.isVertical {
+            Rectangle()
+                .fill(.primary.opacity(0.2))
+                .frame(height: 1)
+                .padding(.horizontal, Self.lineVerticalInset)
+        } else {
+            Rectangle()
+                .fill(.primary.opacity(0.2))
+                .frame(width: 1)
+                .padding(.vertical, Self.lineVerticalInset)
+        }
+    }
+
+    private var position: ResolvedDockWindowPosition {
+        preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
     }
 }

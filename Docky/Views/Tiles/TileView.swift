@@ -11,6 +11,7 @@ import SwiftUI
 
 struct TileView: View {
     let tile: Tile
+    @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
     @ObservedObject private var workspace = WorkspaceService.shared
     @State private var isHovering = false
@@ -18,8 +19,10 @@ struct TileView: View {
     @State private var isFolderPopoverPresented = false
     @State private var isContextMenuPresented = false
     @State private var folderSnapshot: FolderContentsSnapshot = .loaded([])
+    @State private var lastFolderPopoverDismissedAt: TimeInterval = 0
 
     private static let finderBundleIdentifier = "com.apple.finder"
+    private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
 
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
         if let catalogActions = MenuCatalogService.shared.contextActions(for: tile, modifierFlags: modifierFlags) {
@@ -68,11 +71,11 @@ struct TileView: View {
 
     var body: some View {
         content
-            .padding(.vertical, verticalPadding)
+            .padding(contentPaddingEdges, contentPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
-                    .padding(.bottom, 2)
+                    .padding(runningIndicatorEdge, 2)
             }
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
@@ -83,24 +86,30 @@ struct TileView: View {
                 isFolderPopoverPresented = false
                 isContextMenuPresented = false
             }
+            .onChange(of: isFolderPopoverPresented) { _, isPresented in
+                guard !isPresented else { return }
+                lastFolderPopoverDismissedAt = Date.timeIntervalSinceReferenceDate
+            }
             .background {
                 ContextActionMenuPresenter(
                     actionProvider: contextActions(modifierFlags:),
+                    preferredEdge: inwardMenuEdge,
                     onPresentationChanged: updateContextMenuPresentation
                 )
 
                 if let tooltipTitle {
                     TileTooltipPopoverPresenter(
                         title: tooltipTitle,
-                        isPresented: isTooltipPresented
+                        isPresented: isTooltipPresented,
+                        preferredEdge: inwardPopoverEdge
                     )
                     .allowsHitTesting(false)
                 }
             }
             .popover(
                 isPresented: $isFolderPopoverPresented,
-                attachmentAnchor: .point(.top),
-                arrowEdge: .bottom
+                attachmentAnchor: folderPopoverAttachmentAnchor,
+                arrowEdge: folderPopoverArrowEdge
             ) {
                 if case .folder(let folder) = tile.content {
                     FolderPopoverView(
@@ -122,13 +131,90 @@ struct TileView: View {
         }
     }
 
-    private var verticalPadding: CGFloat {
+    private var contentPadding: CGFloat {
         switch tile.content {
         case .divider:
             0
         default:
             preferences.tileVerticalPadding
         }
+    }
+
+    private var contentPaddingEdges: Edge.Set {
+        position.isVertical ? .horizontal : .vertical
+    }
+
+    private var position: ResolvedDockWindowPosition {
+        preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
+    }
+
+    private var runningIndicatorAlignment: Alignment {
+        switch position {
+        case .top:
+            .top
+        case .left:
+            .leading
+        case .right:
+            .trailing
+        case .bottom:
+            .bottom
+        }
+    }
+
+    private var runningIndicatorEdge: Edge.Set {
+        switch position {
+        case .top:
+            .top
+        case .left:
+            .leading
+        case .right:
+            .trailing
+        case .bottom:
+            .bottom
+        }
+    }
+
+    private var folderPopoverAttachmentAnchor: PopoverAttachmentAnchor {
+        switch position {
+        case .top:
+            .point(.bottom)
+        case .left:
+            .point(.trailing)
+        case .right:
+            .point(.leading)
+        case .bottom:
+            .point(.top)
+        }
+    }
+
+    private var folderPopoverArrowEdge: Edge {
+        switch position {
+        case .top:
+            .top
+        case .left:
+            .leading
+        case .right:
+            .trailing
+        case .bottom:
+            .bottom
+        }
+    }
+
+    private var inwardPopoverEdge: NSRectEdge {
+        switch position {
+        case .top:
+            .minY
+        case .left:
+            .maxX
+        case .right:
+            .minX
+        case .bottom:
+            .maxY
+        }
+    }
+
+    private var inwardMenuEdge: NSRectEdge {
+        inwardPopoverEdge
     }
 
     @ViewBuilder
@@ -191,6 +277,11 @@ struct TileView: View {
 
             if isFolderPopoverPresented {
                 isFolderPopoverPresented = false
+                return
+            }
+
+            let now = Date.timeIntervalSinceReferenceDate
+            guard now - lastFolderPopoverDismissedAt > Self.folderPopoverRetapGuardInterval else {
                 return
             }
 
@@ -292,9 +383,10 @@ private struct TileTooltipView: View {
 private struct TileTooltipPopoverPresenter: NSViewRepresentable {
     let title: String
     let isPresented: Bool
+    let preferredEdge: NSRectEdge
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(title: title)
+        Coordinator(title: title, preferredEdge: preferredEdge)
     }
 
     func makeNSView(context: Context) -> TooltipAnchorView {
@@ -302,7 +394,7 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TooltipAnchorView, context: Context) {
-        context.coordinator.update(title: title)
+        context.coordinator.update(title: title, preferredEdge: preferredEdge)
 
         if isPresented {
             context.coordinator.show(relativeTo: nsView)
@@ -318,8 +410,10 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
     final class Coordinator {
         private let hostingController = NSHostingController(rootView: TileTooltipView(title: ""))
         private let popover = NSPopover()
+        private var preferredEdge: NSRectEdge
 
-        init(title: String) {
+        init(title: String, preferredEdge: NSRectEdge) {
+            self.preferredEdge = preferredEdge
             hostingController.rootView = TileTooltipView(title: title)
             popover.contentViewController = hostingController
             popover.animates = false
@@ -327,20 +421,16 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
             updateContentSize()
         }
 
-        func update(title: String) {
+        func update(title: String, preferredEdge: NSRectEdge) {
+            self.preferredEdge = preferredEdge
             hostingController.rootView = TileTooltipView(title: title)
             updateContentSize()
         }
 
         func show(relativeTo view: NSView) {
             guard view.window != nil, !popover.isShown else { return }
-            let anchorRect = NSRect(
-                x: view.bounds.midX - 0.5,
-                y: view.bounds.maxY - 1,
-                width: 1,
-                height: 1
-            )
-            popover.show(relativeTo: anchorRect, of: view, preferredEdge: .maxY)
+            let anchorRect = anchorRect(in: view.bounds)
+            popover.show(relativeTo: anchorRect, of: view, preferredEdge: preferredEdge)
         }
 
         func close() {
@@ -353,6 +443,21 @@ private struct TileTooltipPopoverPresenter: NSViewRepresentable {
             let size = view.fittingSize
             hostingController.preferredContentSize = size
             popover.contentSize = size
+        }
+
+        private func anchorRect(in bounds: NSRect) -> NSRect {
+            switch preferredEdge {
+            case .minX:
+                NSRect(x: bounds.minX, y: bounds.midY - 0.5, width: 1, height: 1)
+            case .maxX:
+                NSRect(x: bounds.maxX - 1, y: bounds.midY - 0.5, width: 1, height: 1)
+            case .minY:
+                NSRect(x: bounds.midX - 0.5, y: bounds.minY, width: 1, height: 1)
+            case .maxY:
+                NSRect(x: bounds.midX - 0.5, y: bounds.maxY - 1, width: 1, height: 1)
+            @unknown default:
+                NSRect(x: bounds.midX - 0.5, y: bounds.maxY - 1, width: 1, height: 1)
+            }
         }
     }
 }

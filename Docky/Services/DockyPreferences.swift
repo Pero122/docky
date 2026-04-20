@@ -13,6 +13,57 @@
 import Combine
 import Foundation
 
+enum DockWindowPosition: String, CaseIterable, Identifiable {
+    case system
+    case left
+    case right
+    case bottom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .left: "Left"
+        case .right: "Right"
+        case .bottom: "Bottom"
+        }
+    }
+
+    func resolved(systemOrientation: DockSettingsService.Orientation) -> ResolvedDockWindowPosition {
+        switch self {
+        case .system:
+            switch systemOrientation {
+            case .bottom: .bottom
+            case .left: .left
+            case .right: .right
+            }
+        case .left:
+            .left
+        case .right:
+            .right
+        case .bottom:
+            .bottom
+        }
+    }
+}
+
+enum ResolvedDockWindowPosition {
+    case top
+    case left
+    case right
+    case bottom
+
+    var isVertical: Bool {
+        switch self {
+        case .left, .right:
+            true
+        case .top, .bottom:
+            false
+        }
+    }
+}
+
 final class DockyPreferences: ObservableObject {
     static let shared = DockyPreferences()
 
@@ -41,18 +92,28 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Edge Docky anchors itself to. `system` mirrors the macOS Dock.
+    @Published var windowPosition: DockWindowPosition {
+        didSet {
+            guard windowPosition != oldValue else { return }
+            defaults.set(windowPosition.rawValue, forKey: Keys.windowPosition)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
         static let tileVerticalPadding = "docky.tileVerticalPadding"
         static let tileSpacing = "docky.tileSpacing"
         static let windowCornerRadius = "docky.windowCornerRadius"
+        static let windowPosition = "docky.windowPosition"
     }
 
     private enum DefaultValues {
         static let tileVerticalPadding: CGFloat = 16
         static let tileSpacing: CGFloat = 0
         static let windowCornerRadius: CGFloat = 24
+        static let windowPosition: DockWindowPosition = .system
     }
 
     private init() {
@@ -60,14 +121,17 @@ final class DockyPreferences: ObservableObject {
         let storedVerticalPadding = defaults.object(forKey: Keys.tileVerticalPadding) as? Double
         let storedTileSpacing = defaults.object(forKey: Keys.tileSpacing) as? Double
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
+        let storedWindowPosition = defaults.string(forKey: Keys.windowPosition)
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
+        self.windowPosition = (storedWindowPosition.flatMap(DockWindowPosition.init(rawValue:)) ?? DefaultValues.windowPosition)
     }
 
     func resetToDefaults() {
         tileVerticalPadding = DefaultValues.tileVerticalPadding
         tileSpacing = DefaultValues.tileSpacing
         windowCornerRadius = DefaultValues.windowCornerRadius
+        windowPosition = DefaultValues.windowPosition
     }
 }

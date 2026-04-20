@@ -55,19 +55,23 @@ struct ContextAction: Identifiable {
 
 struct ContextActionMenuPresenter: NSViewRepresentable {
     let actionProvider: (NSEvent.ModifierFlags) -> [ContextAction]
+    let preferredEdge: NSRectEdge
     let onPresentationChanged: (Bool) -> Void
 
     init(
         actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+        preferredEdge: NSRectEdge = .maxY,
         onPresentationChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         self.actionProvider = actionProvider
+        self.preferredEdge = preferredEdge
         self.onPresentationChanged = onPresentationChanged
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             actionProvider: actionProvider,
+            preferredEdge: preferredEdge,
             onPresentationChanged: onPresentationChanged
         )
     }
@@ -79,6 +83,7 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
     func updateNSView(_ nsView: AnchorView, context: Context) {
         context.coordinator.update(
             actionProvider: actionProvider,
+            preferredEdge: preferredEdge,
             onPresentationChanged: onPresentationChanged
         )
         DispatchQueue.main.async {
@@ -94,22 +99,27 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         private weak var anchorView: NSView?
         private var eventMonitor: Any?
         private var actionProvider: (NSEvent.ModifierFlags) -> [ContextAction]
+        private var preferredEdge: NSRectEdge
         private var onPresentationChanged: (Bool) -> Void
 
         init(
             actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+            preferredEdge: NSRectEdge,
             onPresentationChanged: @escaping (Bool) -> Void
         ) {
             self.actionProvider = actionProvider
+            self.preferredEdge = preferredEdge
             self.onPresentationChanged = onPresentationChanged
             super.init()
         }
 
         func update(
             actionProvider: @escaping (NSEvent.ModifierFlags) -> [ContextAction],
+            preferredEdge: NSRectEdge,
             onPresentationChanged: @escaping (Bool) -> Void
         ) {
             self.actionProvider = actionProvider
+            self.preferredEdge = preferredEdge
             self.onPresentationChanged = onPresentationChanged
         }
 
@@ -171,15 +181,25 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
                 typealias Fn = @convention(c) (NSMenu, Selector, NSRect, NSView?, NSRectEdge) -> Void
                 let imp = menu.method(for: selector)
                 let fn = unsafeBitCast(imp, to: Fn.self)
-                fn(menu, selector, view.bounds, view, .maxY)
+                fn(menu, selector, view.bounds, view, preferredEdge)
                 return
             }
 
             menu.update()
-            let anchor = NSPoint(
-                x: view.bounds.midX - menu.size.width / 2,
-                y: view.bounds.maxY
-            )
+            let anchor: NSPoint
+            let anchorRect = view.bounds
+            switch preferredEdge {
+            case .minX:
+                anchor = NSPoint(x: anchorRect.minX, y: anchorRect.midY)
+            case .maxX:
+                anchor = NSPoint(x: anchorRect.maxX, y: anchorRect.midY)
+            case .minY:
+                anchor = NSPoint(x: anchorRect.midX - menu.size.width / 2, y: anchorRect.minY)
+            case .maxY:
+                anchor = NSPoint(x: anchorRect.midX - menu.size.width / 2, y: anchorRect.maxY)
+            @unknown default:
+                anchor = NSPoint(x: anchorRect.midX - menu.size.width / 2, y: anchorRect.maxY)
+            }
             menu.popUp(positioning: menu.items.last, at: anchor, in: view)
         }
 

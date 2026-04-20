@@ -75,11 +75,13 @@ final class MainWindow: NSWindow {
 
     private func observeFrameInputs() {
         let signals: [AnyPublisher<Void, Never>] = [
+            dockSettings.$orientation.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$tileSize.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$largeSize.map { _ in () }.eraseToAnyPublisher(),
             dockSettings.$magnification.map { _ in () }.eraseToAnyPublisher(),
             preferences.$tileVerticalPadding.map { _ in () }.eraseToAnyPublisher(),
             preferences.$tileSpacing.map { _ in () }.eraseToAnyPublisher(),
+            preferences.$windowPosition.map { _ in () }.eraseToAnyPublisher(),
             tileStore.$tiles.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(signals)
@@ -89,27 +91,61 @@ final class MainWindow: NSWindow {
     }
 
     private func applyFrame() {
-        let screenBounds = NSScreen.main?.frame ?? .zero
+        let screenBounds = screen?.frame ?? NSScreen.main?.frame ?? .zero
         let iconHeight = dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
         let contentPadding = MainWindowContainerView.contentPadding
-        let height = iconHeight + preferences.tileVerticalPadding * 2 + contentPadding * 2
+        let tileHeight = iconHeight + preferences.tileVerticalPadding * 2
+        let position = preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
 
-        let contentWidth = TileContainerView.contentWidth(
+        let contentSize = TileContainerView.contentSize(
             tiles: tileStore.tiles,
             tileSize: dockSettings.tileSize,
-            tileSpacing: preferences.tileSpacing
+            tileHeight: tileHeight,
+            tileSpacing: preferences.tileSpacing,
+            position: position
         )
-        let width = max(minimumWidth, contentWidth) + contentPadding * 2
+        let width = (position.isVertical ? contentSize.width : max(minimumWidth, contentSize.width)) + contentPadding * 2
+        let height = contentSize.height + contentPadding * 2
+        let origin = frameOrigin(in: screenBounds, size: CGSize(width: width, height: height), position: position)
 
         setFrame(
             CGRect(
-                x: (screenBounds.width - width) / 2,
-                y: 0,
+                x: origin.x,
+                y: origin.y,
                 width: width,
                 height: height
             ),
             display: true,
             animate: false
         )
+    }
+
+    private func frameOrigin(
+        in screenBounds: CGRect,
+        size: CGSize,
+        position: ResolvedDockWindowPosition
+    ) -> CGPoint {
+        switch position {
+        case .top:
+            CGPoint(
+                x: screenBounds.minX + (screenBounds.width - size.width) / 2,
+                y: screenBounds.maxY - size.height
+            )
+        case .left:
+            CGPoint(
+                x: screenBounds.minX,
+                y: screenBounds.minY + (screenBounds.height - size.height) / 2
+            )
+        case .right:
+            CGPoint(
+                x: screenBounds.maxX - size.width,
+                y: screenBounds.minY + (screenBounds.height - size.height) / 2
+            )
+        case .bottom:
+            CGPoint(
+                x: screenBounds.minX + (screenBounds.width - size.width) / 2,
+                y: screenBounds.minY
+            )
+        }
     }
 }
