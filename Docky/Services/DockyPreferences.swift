@@ -108,6 +108,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Docky-owned ordered pinned app bundle identifiers.
+    @Published var pinnedAppBundleIdentifiers: [String] {
+        didSet {
+            guard pinnedAppBundleIdentifiers != oldValue else { return }
+            defaults.set(pinnedAppBundleIdentifiers, forKey: Keys.pinnedAppBundleIdentifiers)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -116,6 +124,7 @@ final class DockyPreferences: ObservableObject {
         static let windowCornerRadius = "docky.windowCornerRadius"
         static let windowPosition = "docky.windowPosition"
         static let autohidesWindow = "docky.autohidesWindow"
+        static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
     }
 
     private enum DefaultValues {
@@ -124,6 +133,7 @@ final class DockyPreferences: ObservableObject {
         static let windowCornerRadius: CGFloat = 24
         static let windowPosition: DockWindowPosition = .system
         static let autohidesWindow = false
+        static let pinnedAppBundleIdentifiers: [String] = []
     }
 
     private init() {
@@ -133,11 +143,13 @@ final class DockyPreferences: ObservableObject {
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
         let storedWindowPosition = defaults.string(forKey: Keys.windowPosition)
         let storedAutohidesWindow = defaults.object(forKey: Keys.autohidesWindow) as? Bool
+        let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
         self.windowPosition = (storedWindowPosition.flatMap(DockWindowPosition.init(rawValue:)) ?? DefaultValues.windowPosition)
         self.autohidesWindow = storedAutohidesWindow ?? DefaultValues.autohidesWindow
+        self.pinnedAppBundleIdentifiers = storedPinnedAppBundleIdentifiers ?? DefaultValues.pinnedAppBundleIdentifiers
     }
 
     func resetToDefaults() {
@@ -146,5 +158,6 @@ final class DockyPreferences: ObservableObject {
         windowCornerRadius = DefaultValues.windowCornerRadius
         windowPosition = DefaultValues.windowPosition
         autohidesWindow = DefaultValues.autohidesWindow
+        pinnedAppBundleIdentifiers = DefaultValues.pinnedAppBundleIdentifiers
     }
 }

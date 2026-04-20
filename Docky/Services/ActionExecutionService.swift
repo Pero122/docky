@@ -55,7 +55,7 @@ final class ActionExecutionService {
             return true
         case .togglePinnedApp:
             guard let bundleIdentifier = context.bundleIdentifier else { return false }
-            return DockEditorService.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !context.isPinned)
+            return TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !context.isPinned)
         case .showAppInFinder:
             guard let bundleIdentifier = context.bundleIdentifier else { return false }
             WorkspaceService.shared.revealApplicationInFinder(bundleIdentifier: bundleIdentifier)

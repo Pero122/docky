@@ -22,6 +22,7 @@ final class TileStore: ObservableObject {
 
     private var pinnedTiles: [Tile] = []
     private var otherTiles: [Tile] = []
+    private var dockPinnedTilesByBundleIdentifier: [String: Tile] = [:]
     /// Currently displayed unpinned running apps, in visual order. May contain
     /// one "ghost" entry at the end — an app that recently exited but sat at
     /// the rightmost position, preserved until something newer takes its slot.
@@ -29,6 +30,7 @@ final class TileStore: ObservableObject {
 
     private var notificationObserver: NSObjectProtocol?
     private var cancellables: Set<AnyCancellable> = []
+    private let preferences = DockyPreferences.shared
 
     private init() {
         refresh()
@@ -42,6 +44,14 @@ final class TileStore: ObservableObject {
         WorkspaceService.shared.$runningApps
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.rebuildTiles() }
+            .store(in: &cancellables)
+        preferences.$pinnedAppBundleIdentifiers
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshPinnedTilesFromPreferences()
+                self?.rebuildTiles()
+            }
             .store(in: &cancellables)
     }
 
@@ -63,7 +73,11 @@ final class TileStore: ObservableObject {
         let refreshedPinnedTiles = apps.enumerated().compactMap { index, entry in
             Self.parse(entry: entry, fallbackID: Self.fallbackTileID(for: entry, at: index, section: "persistent-apps"))
         }
-        pinnedTiles = mergedPinnedTiles(refreshed: refreshedPinnedTiles)
+        dockPinnedTilesByBundleIdentifier = Dictionary(uniqueKeysWithValues: refreshedPinnedTiles.compactMap { tile in
+            bundleIdentifier(of: tile).map { ($0, tile) }
+        })
+        seedPinnedPreferencesIfNeeded(from: refreshedPinnedTiles)
+        refreshPinnedTilesFromPreferences()
         otherTiles = others.enumerated().compactMap { index, entry in
             Self.parse(entry: entry, fallbackID: Self.fallbackTileID(for: entry, at: index, section: "persistent-others"))
         }
@@ -72,6 +86,36 @@ final class TileStore: ObservableObject {
 
     func isPinnedReorderable(tileID: String) -> Bool {
         pinnedTiles.contains { $0.id == tileID }
+    }
+
+    func isPinned(bundleIdentifier: String) -> Bool {
+        preferences.pinnedAppBundleIdentifiers.contains(bundleIdentifier)
+    }
+
+    @discardableResult
+    func setPinnedApp(bundleIdentifier: String, pinned: Bool) -> Bool {
+        guard !bundleIdentifier.isEmpty, bundleIdentifier != Self.finderBundleID else {
+            return false
+        }
+
+        var pinnedBundleIdentifiers = preferences.pinnedAppBundleIdentifiers
+
+        if pinned {
+            guard !pinnedBundleIdentifiers.contains(bundleIdentifier) else {
+                return false
+            }
+            pinnedBundleIdentifiers.append(bundleIdentifier)
+        } else {
+            guard pinnedBundleIdentifiers.contains(bundleIdentifier) else {
+                return false
+            }
+            pinnedBundleIdentifiers.removeAll { $0 == bundleIdentifier }
+        }
+
+        preferences.pinnedAppBundleIdentifiers = pinnedBundleIdentifiers
+        refreshPinnedTilesFromPreferences()
+        rebuildTiles()
+        return true
     }
 
     func setPinnedTileOrder(ids: [String]) {
@@ -86,23 +130,66 @@ final class TileStore: ObservableObject {
         }
 
         pinnedTiles = reorderedTiles
+        preferences.pinnedAppBundleIdentifiers = reorderedTiles.compactMap(bundleIdentifier(of:))
         rebuildTiles()
+    }
+
+    @discardableResult
+    func pinApp(bundleIdentifier: String, at destinationIndex: Int) -> Bool {
+        guard !bundleIdentifier.isEmpty else {
+            return false
+        }
+
+        if !isPinned(bundleIdentifier: bundleIdentifier) {
+            guard setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: true) else {
+                return false
+            }
+        }
+
+        guard let pinnedTile = pinnedTiles.first(where: { self.bundleIdentifier(of: $0) == bundleIdentifier }) else {
+            return false
+        }
+
+        var reorderedIDs = pinnedTiles.map(\.id)
+        reorderedIDs.removeAll { $0 == pinnedTile.id }
+        let clampedDestinationIndex = min(max(destinationIndex, 0), reorderedIDs.count)
+        reorderedIDs.insert(pinnedTile.id, at: clampedDestinationIndex)
+        setPinnedTileOrder(ids: reorderedIDs)
+        return true
     }
 
     private static let finderBundleID = "com.apple.finder"
 
-    private func mergedPinnedTiles(refreshed: [Tile]) -> [Tile] {
-        guard !pinnedTiles.isEmpty else {
-            return refreshed
+    private func bundleIdentifier(of tile: Tile) -> String? {
+        if case .app(let app) = tile.content {
+            return app.bundleIdentifier
+        }
+        return nil
+    }
+
+    private func seedPinnedPreferencesIfNeeded(from refreshed: [Tile]) {
+        guard preferences.pinnedAppBundleIdentifiers.isEmpty else {
+            return
         }
 
-        let refreshedTilesByID = Dictionary(uniqueKeysWithValues: refreshed.map { ($0.id, $0) })
-        var mergedTiles: [Tile] = pinnedTiles.compactMap { existingTile in
-            refreshedTilesByID[existingTile.id]
+        let bundleIdentifiers = refreshed.compactMap { bundleIdentifier(of: $0) }
+        guard !bundleIdentifiers.isEmpty else {
+            return
         }
-        let existingIDs = Set(mergedTiles.map(\.id))
-        mergedTiles.append(contentsOf: refreshed.filter { !existingIDs.contains($0.id) })
-        return mergedTiles
+
+        preferences.pinnedAppBundleIdentifiers = bundleIdentifiers
+    }
+
+    private func refreshPinnedTilesFromPreferences() {
+        pinnedTiles = preferences.pinnedAppBundleIdentifiers.compactMap(tileForPinnedBundleIdentifier(_:))
+    }
+
+    private func tileForPinnedBundleIdentifier(_ bundleIdentifier: String) -> Tile? {
+        if let tile = dockPinnedTilesByBundleIdentifier[bundleIdentifier] {
+            return Self.makePinnedTile(from: tile, bundleIdentifier: bundleIdentifier)
+        }
+
+        return Self.makePinnedTile(bundleIdentifier: bundleIdentifier)
     }
 
     private func rebuildTiles() {
@@ -238,6 +325,32 @@ final class TileStore: ObservableObject {
             bundleIdentifier: bundleIdentifier,
             displayName: label
         )))
+    }
+
+    private static func makePinnedTile(from tile: Tile, bundleIdentifier: String) -> Tile? {
+        guard case .app(let app) = tile.content else {
+            return nil
+        }
+
+        return Tile(
+            id: "pinned:\(bundleIdentifier)",
+            content: .app(AppTile(bundleIdentifier: bundleIdentifier, displayName: app.displayName))
+        )
+    }
+
+    private static func makePinnedTile(bundleIdentifier: String) -> Tile? {
+        guard !bundleIdentifier.isEmpty,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return nil
+        }
+
+        return Tile(
+            id: "pinned:\(bundleIdentifier)",
+            content: .app(AppTile(
+                bundleIdentifier: bundleIdentifier,
+                displayName: FileManager.default.displayName(atPath: url.path)
+            ))
+        )
     }
 
     private static func parseFolderTile(id: String, data: [String: Any]) -> Tile? {

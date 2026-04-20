@@ -14,11 +14,11 @@ struct TileContainerView: View {
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
 
-    @State private var draggedPinnedTileID: String?
-    @State private var draggedPinnedTileOffset: CGFloat = 0
-    @State private var draggedPinnedTileInitialFrame: CGRect?
+    @State private var draggedTileID: String?
+    @State private var draggedTileOffset: CGFloat = 0
+    @State private var draggedTileInitialFrame: CGRect?
     @State private var draggedPinnedTileDestinationIndex: Int?
-    @State private var pinnedTileFrames: [String: CGRect] = [:]
+    @State private var tileFrames: [String: CGRect] = [:]
 
     private let reorderCoordinateSpaceName = "TileContainerReorderSpace"
 
@@ -42,7 +42,7 @@ struct TileContainerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(name: reorderCoordinateSpaceName)
-        .onPreferenceChange(PinnedTileFramePreferenceKey.self) { pinnedTileFrames = $0 }
+        .onPreferenceChange(TileFramePreferenceKey.self) { tileFrames = $0 }
         .animation(tileMutationAnimation, value: displayTiles)
     }
 
@@ -52,89 +52,81 @@ struct TileContainerView: View {
             let size = Self.size(for: tile, tileSize: dockSettings.tileSize, tileHeight: tileHeight, position: position)
             TileView(tile: tile)
                 .frame(width: size.width, height: size.height)
-                .opacity(tile.id == draggedPinnedTileID ? 0 : 1)
+                .opacity(tile.id == draggedTileID ? 0 : 1)
                 .background(alignment: .topLeading) {
-                    if isPinnedReorderable(tileID: tile.id) {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: PinnedTileFramePreferenceKey.self,
-                                value: [tile.id: proxy.frame(in: .named(reorderCoordinateSpaceName))]
-                            )
-                        }
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: TileFramePreferenceKey.self,
+                            value: [tile.id: proxy.frame(in: .named(reorderCoordinateSpaceName))]
+                        )
                     }
                 }
-                .gesture(reorderGesture(for: tile.id), including: isPinnedReorderable(tileID: tile.id) ? .gesture : .subviews)
+                .gesture(reorderGesture(for: tile), including: isTileDraggable(tile) ? .gesture : .subviews)
                 .transition(tileTransition)
         }
     }
 
     @ViewBuilder
     private var draggedTileOverlay: some View {
-        if let draggedPinnedTile {
-            let size = Self.size(for: draggedPinnedTile, tileSize: dockSettings.tileSize, tileHeight: tileHeight, position: position)
-            TileView(tile: draggedPinnedTile)
+        if let draggedTile {
+            let size = Self.size(for: draggedTile, tileSize: dockSettings.tileSize, tileHeight: tileHeight, position: position)
+            TileView(tile: draggedTile)
                 .frame(width: size.width, height: size.height)
                 .position(draggedTilePosition)
-                .offset(axisSize(value: draggedPinnedTileOffset))
+                .offset(axisSize(value: draggedTileOffset))
                 .zIndex(10)
                 .allowsHitTesting(false)
         }
     }
 
     private var displayTiles: [Tile] {
-        let previewPinnedIDs = previewPinnedTileIDs
-        guard !previewPinnedIDs.isEmpty else {
+        guard let finderTile = store.tiles.first else {
             return store.tiles
         }
 
-        let pinnedTilesByID = Dictionary(uniqueKeysWithValues: store.tiles.compactMap { tile in
-            isPinnedReorderable(tileID: tile.id) ? (tile.id, tile) : nil
-        })
+        var result: [Tile] = [finderTile]
+        result.append(contentsOf: previewPinnedTiles)
 
-        var result: [Tile] = []
-        var insertedPinnedTiles = false
-
-        for tile in store.tiles {
-            if isPinnedReorderable(tileID: tile.id) {
-                if !insertedPinnedTiles {
-                    result.append(contentsOf: previewPinnedIDs.compactMap { pinnedTilesByID[$0] })
-                    insertedPinnedTiles = true
-                }
+        for tile in store.tiles.dropFirst() {
+            if isPinnedReorderable(tileID: tile.id) || shouldHideDraggedOriginalTile(tileID: tile.id) {
                 continue
             }
-
             result.append(tile)
         }
 
         return result
     }
 
-    private var pinnedTileIDs: [String] {
-        store.tiles.filter { isPinnedReorderable(tileID: $0.id) }.map(\.id)
+    private var pinnedTiles: [Tile] {
+        store.tiles.filter { isPinnedReorderable(tileID: $0.id) }
     }
 
-    private var previewPinnedTileIDs: [String] {
-        guard let draggedPinnedTileID,
+    private var pinnedTileIDs: [String] {
+        pinnedTiles.map(\.id)
+    }
+
+    private var previewPinnedTiles: [Tile] {
+        guard let draggedTile,
               let destinationIndex = draggedPinnedTileDestinationIndex else {
-            return pinnedTileIDs
+            return pinnedTiles
         }
 
-        var remainingPinnedTileIDs = pinnedTileIDs.filter { $0 != draggedPinnedTileID }
-        let clampedDestinationIndex = min(max(destinationIndex, 0), remainingPinnedTileIDs.count)
-        remainingPinnedTileIDs.insert(draggedPinnedTileID, at: clampedDestinationIndex)
-        return remainingPinnedTileIDs
+        var remainingPinnedTiles = pinnedTiles.filter { $0.id != draggedTile.id }
+        let clampedDestinationIndex = min(max(destinationIndex, 0), remainingPinnedTiles.count)
+        remainingPinnedTiles.insert(draggedTile, at: clampedDestinationIndex)
+        return remainingPinnedTiles
     }
 
-    private var draggedPinnedTile: Tile? {
-        guard let draggedPinnedTileID else {
+    private var draggedTile: Tile? {
+        guard let draggedTileID else {
             return nil
         }
 
-        return store.tiles.first { $0.id == draggedPinnedTileID }
+        return store.tiles.first { $0.id == draggedTileID }
     }
 
     private var draggedTilePosition: CGPoint {
-        guard let frame = draggedPinnedTileInitialFrame else {
+        guard let frame = draggedTileInitialFrame else {
             return .zero
         }
 
@@ -174,48 +166,72 @@ struct TileContainerView: View {
         store.isPinnedReorderable(tileID: tileID)
     }
 
-    private func reorderGesture(for tileID: String) -> some Gesture {
+    private func isTileDraggable(_ tile: Tile) -> Bool {
+        guard case .app(let app) = tile.content else {
+            return false
+        }
+        return !app.bundleIdentifier.isEmpty && app.bundleIdentifier != "com.apple.finder"
+    }
+
+    private var isDraggingPinnedTile: Bool {
+        guard let draggedTileID else {
+            return false
+        }
+        return isPinnedReorderable(tileID: draggedTileID)
+    }
+
+    private func shouldHideDraggedOriginalTile(tileID: String) -> Bool {
+        guard tileID == draggedTileID else {
+            return false
+        }
+        return !isDraggingPinnedTile && draggedPinnedTileDestinationIndex != nil
+    }
+
+    private func reorderGesture(for tile: Tile) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(reorderCoordinateSpaceName))
             .onChanged { value in
-                updateDrag(for: tileID, value: value)
+                updateDrag(for: tile, value: value)
             }
             .onEnded { value in
-                endDrag(for: tileID, value: value)
+                endDrag(for: tile, value: value)
             }
     }
 
-    private func updateDrag(for tileID: String, value: DragGesture.Value) {
-        guard isPinnedReorderable(tileID: tileID) else {
+    private func updateDrag(for tile: Tile, value: DragGesture.Value) {
+        guard isTileDraggable(tile) else {
             return
         }
 
-        if draggedPinnedTileID == nil {
-            draggedPinnedTileID = tileID
-            draggedPinnedTileInitialFrame = pinnedTileFrames[tileID]
-            draggedPinnedTileDestinationIndex = pinnedTileIDs.firstIndex(of: tileID)
+        if draggedTileID == nil {
+            draggedTileID = tile.id
+            draggedTileInitialFrame = tileFrames[tile.id]
+            draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
         }
 
-        guard draggedPinnedTileID == tileID else {
+        guard draggedTileID == tile.id else {
             return
         }
 
-        draggedPinnedTileOffset = projected(size: value.translation)
-        updatePreviewDestination(at: projected(point: value.location), draggedTileID: tileID)
+        draggedTileOffset = projected(size: value.translation)
+        updatePreviewDestination(at: projected(point: value.location), draggedTile: tile)
     }
 
-    private func endDrag(for tileID: String, value: DragGesture.Value) {
-        updateDrag(for: tileID, value: value)
+    private func endDrag(for tile: Tile, value: DragGesture.Value) {
+        updateDrag(for: tile, value: value)
 
-        guard draggedPinnedTileID == tileID else {
+        guard draggedTileID == tile.id else {
             clearDragState()
             return
         }
 
-        let finalPinnedTileIDs = previewPinnedTileIDs
-        let didChangeOrder = finalPinnedTileIDs != pinnedTileIDs
-
-        if didChangeOrder {
-            store.setPinnedTileOrder(ids: finalPinnedTileIDs)
+        if isPinnedReorderable(tileID: tile.id) {
+            let finalPinnedTileIDs = previewPinnedTiles.map(\.id)
+            if finalPinnedTileIDs != pinnedTileIDs {
+                store.setPinnedTileOrder(ids: finalPinnedTileIDs)
+            }
+        } else if let destinationIndex = draggedPinnedTileDestinationIndex,
+                  let bundleIdentifier = draggedBundleIdentifier {
+            _ = store.pinApp(bundleIdentifier: bundleIdentifier, at: destinationIndex)
         }
 
         withAnimation(tileMutationAnimation) {
@@ -223,20 +239,34 @@ struct TileContainerView: View {
         }
     }
 
-    private func updatePreviewDestination(at positionValue: CGFloat, draggedTileID: String) {
-        let visiblePinnedTileIDs = previewPinnedTileIDs.filter { $0 != draggedTileID }
-        guard !visiblePinnedTileIDs.isEmpty else {
+    private var draggedBundleIdentifier: String? {
+        guard let draggedTile, case .app(let app) = draggedTile.content else {
+            return nil
+        }
+        return app.bundleIdentifier
+    }
+
+    private func updatePreviewDestination(at positionValue: CGFloat, draggedTile: Tile) {
+        guard isPointInPinnedDropRegion(positionValue) || isPinnedReorderable(tileID: draggedTile.id) else {
+            if !isPinnedReorderable(tileID: draggedTile.id) {
+                draggedPinnedTileDestinationIndex = nil
+            }
+            return
+        }
+
+        let visiblePinnedTiles = previewPinnedTiles.filter { $0.id != draggedTile.id }
+        guard !visiblePinnedTiles.isEmpty else {
             draggedPinnedTileDestinationIndex = 0
             return
         }
 
-        let destinationIndex = visiblePinnedTileIDs.enumerated().first { _, tileID in
-            guard let frame = pinnedTileFrames[tileID] else {
+        let destinationIndex = visiblePinnedTiles.enumerated().first { _, tile in
+            guard let frame = tileFrames[tile.id] else {
                 return false
             }
             let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
             return positionValue < midpoint
-        }?.offset ?? visiblePinnedTileIDs.count
+        }?.offset ?? visiblePinnedTiles.count
 
         guard draggedPinnedTileDestinationIndex != destinationIndex else {
             return
@@ -247,10 +277,25 @@ struct TileContainerView: View {
         }
     }
 
+    private func isPointInPinnedDropRegion(_ positionValue: CGFloat) -> Bool {
+        guard let finderFrame = tileFrames["pinned:com.apple.finder"],
+              let trailingBoundaryFrame = tileFrames[pinnedTrailingBoundaryTileID] else {
+            return false
+        }
+
+        let lowerBound = projected(point: finderFrame.origin) + projected(size: finderFrame.size)
+        let upperBound = projected(point: trailingBoundaryFrame.origin)
+        return positionValue >= lowerBound && positionValue <= upperBound
+    }
+
+    private var pinnedTrailingBoundaryTileID: String {
+        tileFrames.keys.contains("divider:running") ? "divider:running" : "divider:trailing"
+    }
+
     private func clearDragState() {
-        draggedPinnedTileID = nil
-        draggedPinnedTileOffset = 0
-        draggedPinnedTileInitialFrame = nil
+        draggedTileID = nil
+        draggedTileOffset = 0
+        draggedTileInitialFrame = nil
         draggedPinnedTileDestinationIndex = nil
     }
 
@@ -308,7 +353,7 @@ struct TileContainerView: View {
     }
 }
 
-private struct PinnedTileFramePreferenceKey: PreferenceKey {
+private struct TileFramePreferenceKey: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]
 
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {

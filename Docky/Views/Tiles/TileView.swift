@@ -320,7 +320,7 @@ struct TileView: View {
 
         if canTogglePinned {
             actions.append(.action("Keep in Dock", isOn: isPinned) {
-                _ = DockEditorService.shared.setPinnedApp(
+                _ = TileStore.shared.setPinnedApp(
                     bundleIdentifier: app.bundleIdentifier,
                     pinned: !isPinned
                 )
