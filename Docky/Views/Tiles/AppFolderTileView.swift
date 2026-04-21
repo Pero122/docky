@@ -8,7 +8,8 @@ import SwiftUI
 
 struct AppFolderTileView: View {
     let tile: AppFolderTile
-    let isOpen: Bool
+    let cornerRadius: CGFloat
+    let indicatorPlaceholderSize: CGFloat
 
     var body: some View {
         VStack(spacing: 2) {
@@ -20,25 +21,10 @@ struct AppFolderTileView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isOpen {
-            openPlaceholder
-        } else {
-            GeometryReader { geo in
-                iconGrid(in: geo.size)
-            }
+        GeometryReader { geo in
+            iconGrid(in: geo.size)
         }
-    }
-
-    private var openPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.primary.opacity(0.16))
-
-            Image(systemName: "square.grid.2x2.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.9))
-        }
-        .padding(6)
+        .offset(y: -2)
     }
 
     private func iconGrid(in size: CGSize) -> some View {
@@ -47,10 +33,10 @@ struct AppFolderTileView: View {
         let gap = min(size.width, size.height) * 0.06
 
         return ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.white.opacity(0.1))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(.white.opacity(0.1), lineWidth: 1)
                 }
 
@@ -82,7 +68,7 @@ struct AppFolderTileView: View {
 
     private var indicatorPlaceholder: some View {
         Circle()
-            .frame(width: 4, height: 4)
+            .frame(width: indicatorPlaceholderSize, height: indicatorPlaceholderSize)
             .foregroundStyle(.clear)
     }
 }

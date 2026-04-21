@@ -127,12 +127,11 @@ struct TileView: View {
     }
 
     var body: some View {
-        content
-            .padding(contentPaddingEdges, contentPadding)
+        laidOutContent
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
-                    .padding(runningIndicatorEdge, 2)
+                    .padding(runningIndicatorEdge, runningIndicatorInset)
             }
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
@@ -184,6 +183,24 @@ struct TileView: View {
     }
 
     @ViewBuilder
+    private var laidOutContent: some View {
+        switch tile.content {
+        case .appFolder, .widget, .smartStack, .folder, .trash:
+            GeometryReader { proxy in
+                content
+                    .frame(
+                        width: max(0, proxy.size.width - contentInsets.width * 2),
+                        height: max(0, proxy.size.height - contentInsets.height * 2)
+                    )
+                    .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            }
+        case .app, .spacer, .divider:
+            content
+                .padding(contentPaddingEdges, contentPadding)
+        }
+    }
+
+    @ViewBuilder
     private var runningIndicator: some View {
         if showsRunningIndicator {
             runningIndicatorShape
@@ -218,14 +235,30 @@ struct TileView: View {
     private var runningIndicatorSize: CGSize {
         switch preferences.activeIndicatorShape {
         case .dot:
-            CGSize(width: 4, height: 4)
+            CGSize(width: runningIndicatorThickness, height: runningIndicatorThickness)
         case .pill:
             if position.isVertical {
-                CGSize(width: 4, height: 12)
+                CGSize(width: runningIndicatorThickness, height: runningIndicatorLength)
             } else {
-                CGSize(width: 12, height: 4)
+                CGSize(width: runningIndicatorLength, height: runningIndicatorThickness)
             }
         }
+    }
+
+    private var runningIndicatorThickness: CGFloat {
+        4 * runningIndicatorScale
+    }
+
+    private var runningIndicatorLength: CGFloat {
+        12 * runningIndicatorScale
+    }
+
+    private var runningIndicatorInset: CGFloat {
+        max(1, round(2 * runningIndicatorScale))
+    }
+
+    private var runningIndicatorScale: CGFloat {
+        max(0.5, min(1, effectiveTileSize / 48))
     }
 
     private var contentPadding: CGFloat {
@@ -239,6 +272,30 @@ struct TileView: View {
 
     private var contentPaddingEdges: Edge.Set {
         position.isVertical ? .horizontal : .vertical
+    }
+
+    private var nonAppContentPadding: CGFloat {
+        switch tile.content {
+        case .appFolder, .widget, .smartStack, .folder, .trash:
+            floor(effectiveTileSize * 3 / 32)
+        case .app, .spacer, .divider:
+            0
+        }
+    }
+
+    private var contentInsets: CGSize {
+        CGSize(
+            width: nonAppContentPadding + (position.isVertical ? contentPadding : 0),
+            height: nonAppContentPadding + (position.isVertical ? 0 : contentPadding)
+        )
+    }
+
+    private var effectiveTileSize: CGFloat {
+        dockSettings.magnification ? dockSettings.largeSize : dockSettings.tileSize
+    }
+
+    private var nonAppTileCornerRadius: CGFloat {
+        effectiveTileSize * 0.225
     }
 
     private var position: ResolvedDockWindowPosition {
@@ -294,13 +351,21 @@ struct TileView: View {
         case .app(let app):
             AppTileView(tile: app)
         case .appFolder(let folder):
-            AppFolderTileView(tile: folder, isOpen: isAppFolderPopoverPresented)
+            AppFolderTileView(
+                tile: folder,
+                cornerRadius: nonAppTileCornerRadius,
+                indicatorPlaceholderSize: runningIndicatorThickness
+            )
         case .widget(let widget):
-            WidgetTileView(tile: widget)
+            WidgetTileView(tile: widget, cornerRadius: nonAppTileCornerRadius)
         case .smartStack(let stack):
-            SmartStackTileView(tile: stack)
+            SmartStackTileView(tile: stack, cornerRadius: nonAppTileCornerRadius)
         case .folder(let folder):
-            FolderTileView(tile: folder, isOpen: isFolderPopoverPresented)
+            FolderTileView(
+                tile: folder,
+                isOpen: isFolderPopoverPresented,
+                indicatorPlaceholderSize: runningIndicatorThickness
+            )
         case .spacer:
             SpacerTileView()
         case .divider:

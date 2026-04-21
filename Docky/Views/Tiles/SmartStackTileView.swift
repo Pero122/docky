@@ -8,6 +8,7 @@ import SwiftUI
 
 struct SmartStackTileView: View {
     let tile: SmartStackTile
+    let cornerRadius: CGFloat
 
     @State private var selection = 0
     @State private var isHovering = false
@@ -23,7 +24,7 @@ struct SmartStackTileView: View {
                     GeometryReader { proxy in
                         VStack(spacing: 0) {
                             ForEach(Array(tile.widgets.enumerated()), id: \.element.identifier) { index, widget in
-                                WidgetTileView(tile: widget, usesOuterPadding: false)
+                                WidgetTileView(tile: widget, cornerRadius: cornerRadius)
                                     .frame(width: proxy.size.width, height: proxy.size.height)
                             }
                         }
@@ -44,7 +45,6 @@ struct SmartStackTileView: View {
                 }
             }
         }
-        .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onHover { isHovering = $0 }
         .onChange(of: tile.widgets.count) { _, count in
@@ -55,7 +55,7 @@ struct SmartStackTileView: View {
     }
 
     private var emptyState: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(.black.opacity(0.12))
             .overlay {
                 VStack(spacing: 4) {

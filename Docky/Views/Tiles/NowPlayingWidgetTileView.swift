@@ -9,24 +9,23 @@ import SwiftUI
 
 struct NowPlayingWidgetTileView: View {
     let tile: WidgetTile
-    let usesOuterPadding: Bool
+    let cornerRadius: CGFloat
     @ObservedObject private var mediaPlayback = MediaPlaybackService.shared
     @State private var isHovering = false
 
     var body: some View {
         ZStack {
-            WidgetMaterialBackground(cornerRadius: 12)
+            WidgetMaterialBackground(cornerRadius: cornerRadius)
 
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color(nsColor: prominentTintColor).opacity(0.36))
 
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
 
             content
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(usesOuterPadding ? 8 : 0)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
     @ViewBuilder

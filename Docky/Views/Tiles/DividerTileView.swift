@@ -6,7 +6,6 @@
 import SwiftUI
 
 struct DividerTileView: View {
-    private static let lineVerticalInset: CGFloat = 15
     let tileID: String
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
@@ -59,13 +58,17 @@ struct DividerTileView: View {
             Rectangle()
                 .fill(.primary.opacity(0.2))
                 .frame(height: 1)
-                .padding(.horizontal, Self.lineVerticalInset)
+                .padding(.horizontal, lineInset)
         } else {
             Rectangle()
                 .fill(.primary.opacity(0.2))
                 .frame(width: 1)
-                .padding(.vertical, Self.lineVerticalInset)
+                .padding(.vertical, lineInset)
         }
+    }
+
+    private var lineInset: CGFloat {
+        dockSettings.tileSize * 0.25
     }
 
     private var position: ResolvedDockWindowPosition {

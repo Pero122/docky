@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 
 struct TileContainerView: View {
     static let edgePadding: CGFloat = 8
-    static let dividerWidth: CGFloat = 40
     private let tileMutationAnimation: Animation = .easeInOut(duration: 0.18)
 
     @ObservedObject private var store = TileStore.shared
@@ -508,9 +507,11 @@ struct TileContainerView: View {
         tileSpacing: CGFloat = 0,
         position: ResolvedDockWindowPosition
     ) -> CGSize {
-        switch (position.isVertical, tile.content) {
+        let dividerExtent = tileSize * 0.5
+
+        return switch (position.isVertical, tile.content) {
         case (false, .divider):
-            CGSize(width: dividerWidth, height: tileHeight)
+            CGSize(width: dividerExtent, height: tileHeight)
         case (false, .widget(let widget)):
             CGSize(width: spanExtent(for: widget.effectiveSpan, baseTileSize: tileSize, tileSpacing: tileSpacing), height: tileHeight)
         case (false, .smartStack(let stack)):
@@ -518,7 +519,7 @@ struct TileContainerView: View {
         case (false, _):
             CGSize(width: tileSize, height: tileHeight)
         case (true, .divider):
-            CGSize(width: tileHeight, height: dividerWidth)
+            CGSize(width: tileHeight / 2, height: dividerExtent)
         case (true, .widget(let widget)):
             CGSize(width: tileHeight, height: spanExtent(for: widget.effectiveSpan, baseTileSize: tileSize, tileSpacing: tileSpacing))
         case (true, .smartStack(let stack)):

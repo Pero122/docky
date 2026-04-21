@@ -9,6 +9,7 @@ import SwiftUI
 struct FolderTileView: View {
     let tile: FolderTile
     let isOpen: Bool
+    let indicatorPlaceholderSize: CGFloat
     @ObservedObject private var permissions = PermissionsService.shared
     @State private var preview: [URL] = []
 
@@ -25,13 +26,27 @@ struct FolderTileView: View {
 
     @ViewBuilder
     private var content: some View {
-        if preview.isEmpty {
+        if isOpen {
+            openPlaceholder
+        } else if preview.isEmpty {
             folderIcon
         } else {
             GeometryReader { geo in
                 stack(in: geo.size)
             }
         }
+    }
+
+    private var openPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.primary.opacity(0.16))
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.9))
+        }
+        .padding(6)
     }
 
     private var folderIcon: some View {
@@ -63,7 +78,7 @@ struct FolderTileView: View {
 
     private var indicatorPlaceholder: some View {
         Circle()
-            .frame(width: 4, height: 4)
+            .frame(width: indicatorPlaceholderSize, height: indicatorPlaceholderSize)
             .foregroundStyle(.clear)
     }
 
