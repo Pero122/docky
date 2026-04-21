@@ -29,8 +29,10 @@ struct TileView: View {
     private func contextActions(modifierFlags: NSEvent.ModifierFlags) -> [ContextAction] {
         if let catalogActions = MenuCatalogService.shared.contextActions(for: tile, modifierFlags: modifierFlags) {
             switch tile.content {
-            case .app, .folder, .trash:
+            case .app, .trash:
                 return catalogActions
+            case .folder:
+                return folderDisplayContextActions + [.divider] + catalogActions
             case .appFolder, .widget, .smartStack, .spacer, .divider:
                 break
             }
@@ -46,7 +48,7 @@ struct TileView: View {
         case .smartStack(let stack):
             return smartStackContextActions(for: stack)
         case .folder(let folder):
-            return [
+            return folderDisplayContextActions + [.divider,
                 .action("Open in Finder") {
                     Task {
                         _ = await AppleScriptService.shared.openFinderWindow(for: folder.url)
@@ -75,6 +77,26 @@ struct TileView: View {
         case .spacer, .divider:
             return customDockyTileActions
         }
+    }
+
+    private var folderDisplayContextActions: [ContextAction] {
+        [
+            .submenu("Display as", children: [
+                .action("Folder", isOn: folderDisplayMode == .folder) {
+                    TileStore.shared.setFolderDisplayMode(tileID: tile.id, mode: .folder)
+                },
+                .action("Contents", isOn: folderDisplayMode == .contents) {
+                    TileStore.shared.setFolderDisplayMode(tileID: tile.id, mode: .contents)
+                }
+            ])
+        ]
+    }
+
+    private var folderDisplayMode: FolderTileDisplayMode {
+        guard case .folder(let folder) = tile.content else {
+            return .contents
+        }
+        return folder.displayMode
     }
 
     private var customDockyTileActions: [ContextAction] {
@@ -888,7 +910,7 @@ private struct FolderPopoverPresenter: NSViewRepresentable {
         private let popover = NSPopover()
         private let hostingController = NSHostingController(
             rootView: FolderPopoverView(
-                tile: FolderTile(url: URL(fileURLWithPath: "/"), displayName: ""),
+                tile: FolderTile(url: URL(fileURLWithPath: "/"), displayName: "", displayMode: .contents),
                 initialSnapshot: .loaded([]),
                 isPresented: .constant(false)
             )

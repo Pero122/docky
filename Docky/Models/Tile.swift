@@ -98,4 +98,5 @@ struct SmartStackTile: Equatable {
 struct FolderTile: Equatable {
     let url: URL
     let displayName: String
+    let displayMode: FolderTileDisplayMode
 }

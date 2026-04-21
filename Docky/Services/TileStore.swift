@@ -530,6 +530,7 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .widget,
                     sourceTileID: nil,
+                    folderDisplayMode: nil,
                     widgetKind: widgetKind,
                     widgetOwnerBundleIdentifier: ownerBundleIdentifier,
                     widgetSpan: item.widgetSpan,
@@ -540,6 +541,7 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .smartStack,
                     sourceTileID: nil,
+                    folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
                     widgetSpan: nil,
@@ -550,6 +552,7 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .spacer,
                     sourceTileID: nil,
+                    folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
                     widgetSpan: nil,
@@ -560,6 +563,7 @@ final class TileStore: ObservableObject {
                     id: item.id,
                     kind: .divider,
                     sourceTileID: nil,
+                    folderDisplayMode: nil,
                     widgetKind: nil,
                     widgetOwnerBundleIdentifier: nil,
                     widgetSpan: nil,
@@ -668,6 +672,7 @@ final class TileStore: ObservableObject {
             id: existingItem.id,
             kind: existingItem.kind,
             sourceTileID: existingItem.sourceTileID,
+            folderDisplayMode: existingItem.folderDisplayMode,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
             widgetSpan: existingItem.widgetSpan,
@@ -722,9 +727,37 @@ final class TileStore: ObservableObject {
             id: existingItem.id,
             kind: existingItem.kind,
             sourceTileID: existingItem.sourceTileID,
+            folderDisplayMode: existingItem.folderDisplayMode,
             widgetKind: existingItem.widgetKind,
             widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
             widgetSpan: span,
+            hiddenWidgetOwnerBundleIdentifiers: existingItem.hiddenWidgetOwnerBundleIdentifiers
+        )
+        preferences.trailingItems = trailingItems
+        refreshTrailingTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    func setFolderDisplayMode(tileID: String, mode: FolderTileDisplayMode) {
+        guard let itemIndex = preferences.trailingItems.firstIndex(where: { Self.trailingTileID(for: $0) == tileID }),
+              preferences.trailingItems[itemIndex].kind == .folder else {
+            return
+        }
+
+        let existingItem = preferences.trailingItems[itemIndex]
+        guard existingItem.effectiveFolderDisplayMode != mode else {
+            return
+        }
+
+        var trailingItems = preferences.trailingItems
+        trailingItems[itemIndex] = TrailingTileItem(
+            id: existingItem.id,
+            kind: existingItem.kind,
+            sourceTileID: existingItem.sourceTileID,
+            folderDisplayMode: mode,
+            widgetKind: existingItem.widgetKind,
+            widgetOwnerBundleIdentifier: existingItem.widgetOwnerBundleIdentifier,
+            widgetSpan: existingItem.widgetSpan,
             hiddenWidgetOwnerBundleIdentifiers: existingItem.hiddenWidgetOwnerBundleIdentifiers
         )
         preferences.trailingItems = trailingItems
@@ -944,7 +977,14 @@ final class TileStore: ObservableObject {
                   case .folder(let folder) = tile.content else {
                 return nil
             }
-            return Tile(id: Self.trailingTileID(for: item), content: .folder(folder))
+            return Tile(
+                id: Self.trailingTileID(for: item),
+                content: .folder(FolderTile(
+                    url: folder.url,
+                    displayName: folder.displayName,
+                    displayMode: item.effectiveFolderDisplayMode
+                ))
+            )
         case .trash:
             return Tile(id: Self.trailingTileID(for: item), content: .trash)
         case .widget:
@@ -1298,7 +1338,7 @@ final class TileStore: ObservableObject {
               let url = URL(string: urlString) else {
             return nil
         }
-        return Tile(id: id, content: .folder(FolderTile(url: url, displayName: label)))
+        return Tile(id: id, content: .folder(FolderTile(url: url, displayName: label, displayMode: .contents)))
     }
 
     private static func inferBundleIdentifier(from url: URL?) -> String? {

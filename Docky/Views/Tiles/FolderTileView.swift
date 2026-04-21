@@ -24,7 +24,7 @@ struct FolderTileView: View {
     private var content: some View {
         if isOpen {
             openPlaceholder
-        } else if preview.isEmpty {
+        } else if tile.displayMode == .folder || preview.isEmpty {
             folderIcon
         } else {
             GeometryReader { geo in
@@ -74,7 +74,7 @@ struct FolderTileView: View {
     }
 
     private var reloadKey: String {
-        "\(tile.url.path)|\(permissions.userFolders)"
+        "\(tile.url.path)|\(permissions.userFolders)|\(tile.displayMode.rawValue)"
     }
 }
 

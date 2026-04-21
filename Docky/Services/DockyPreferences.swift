@@ -135,16 +135,22 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
     let id: String
     let kind: TrailingTileItemKind
     let sourceTileID: String?
+    let folderDisplayMode: FolderTileDisplayMode?
     let widgetKind: WidgetKind?
     let widgetOwnerBundleIdentifier: String?
     let widgetSpan: TileSpan?
     let hiddenWidgetOwnerBundleIdentifiers: [String]
+
+    var effectiveFolderDisplayMode: FolderTileDisplayMode {
+        folderDisplayMode ?? .contents
+    }
 
     nonisolated static func folder(sourceTileID: String) -> Self {
         Self(
             id: "folder:\(sourceTileID)",
             kind: .folder,
             sourceTileID: sourceTileID,
+            folderDisplayMode: .contents,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -157,6 +163,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "trash",
             kind: .trash,
             sourceTileID: nil,
+            folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -169,6 +176,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .widget,
             sourceTileID: nil,
+            folderDisplayMode: nil,
             widgetKind: kind,
             widgetOwnerBundleIdentifier: ownerBundleIdentifier,
             widgetSpan: span,
@@ -181,6 +189,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .smartStack,
             sourceTileID: nil,
+            folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -193,6 +202,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .spacer,
             sourceTileID: nil,
+            folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -205,6 +215,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
             id: "custom:\(UUID().uuidString)",
             kind: .divider,
             sourceTileID: nil,
+            folderDisplayMode: nil,
             widgetKind: nil,
             widgetOwnerBundleIdentifier: nil,
             widgetSpan: nil,
@@ -274,6 +285,20 @@ enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
         switch self {
         case .dot: "Dot"
         case .pill: "Pill"
+        }
+    }
+}
+
+enum FolderTileDisplayMode: String, CaseIterable, Codable, Identifiable {
+    case folder
+    case contents
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .folder: "Folder"
+        case .contents: "Contents"
         }
     }
 }
