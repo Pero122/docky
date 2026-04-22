@@ -20,6 +20,13 @@ struct WidgetTileView: View {
                 renderedSpan: renderedSpan,
                 isWithinStack: isWithinStack
             )
+        case .weather:
+            WeatherWidgetTileView(
+                tile: tile,
+                cornerRadius: cornerRadius,
+                renderedSpan: renderedSpan,
+                isWithinStack: isWithinStack
+            )
         }
     }
 }

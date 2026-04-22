@@ -302,6 +302,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Docky needs automation access to control Finder for reveal, folder, and Trash actions.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Docky uses your location to show local weather in the weather widget.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -350,6 +351,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Docky needs automation access to control Finder for reveal, folder, and Trash actions.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Docky uses your location to show local weather in the weather widget.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;

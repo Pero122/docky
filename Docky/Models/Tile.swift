@@ -54,6 +54,7 @@ struct AppFolderTile: Equatable {
 
 enum WidgetKind: String, CaseIterable, Codable, Identifiable {
     case nowPlaying
+    case weather
 
     var id: String { rawValue }
 
@@ -61,6 +62,8 @@ enum WidgetKind: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .nowPlaying:
             "Now Playing"
+        case .weather:
+            "Weather"
         }
     }
 }

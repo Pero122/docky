@@ -90,7 +90,7 @@ struct NowPlayingWidgetTileView: View {
             artworkView(size: layout.artworkSize, artworkCornerRadius: layout.artworkCornerRadius)
 
             VStack(alignment: .leading, spacing: layout.stackSpacing) {
-                Text(playbackState?.isPresentable == false ? "Not Playing" : playbackTitle)
+                Text(playbackState?.isPresentable == false ? (playbackState?.title ?? "Not Playing") : playbackTitle)
                     .font(.system(size: layout.titleFontSize, weight: .semibold))
                     .foregroundStyle(primaryForegroundColor)
                     .lineLimit(1)

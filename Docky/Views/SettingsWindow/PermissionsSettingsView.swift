@@ -14,6 +14,7 @@ struct PermissionsSettingsView: View {
             permissionSection(for: .finderAutomation)
             permissionSection(for: .accessibility)
             permissionSection(for: .screenCapture)
+            permissionSection(for: .location)
 
             Section {
                 Button("Re-check Permissions") {
@@ -48,7 +49,7 @@ struct PermissionsSettingsView: View {
                     service.openSystemSettings(for: permission)
                 }
 
-                if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture {
+                if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture || permission == .location {
                     requestButton(for: permission)
                 }
 
@@ -63,7 +64,7 @@ struct PermissionsSettingsView: View {
 
     @ViewBuilder
     private func requestButton(for permission: Permission) -> some View {
-        if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture {
+        if permission == .finderAutomation || permission == .accessibility || permission == .screenCapture || permission == .location {
             Button(buttonTitle(for: permission)) {
                 Task {
                     _ = await service.requestPermission(for: permission)
@@ -94,6 +95,7 @@ struct PermissionsSettingsView: View {
         case .automation: return "Automation"
         case .accessibility: return "Accessibility"
         case .screenCapture: return "Screen Recording"
+        case .location: return "Location"
         case .none: return nil
         }
     }
@@ -108,6 +110,8 @@ struct PermissionsSettingsView: View {
             return service.accessibilityGrantMethod
         case .screenCapture:
             return service.screenCaptureGrantMethod
+        case .location:
+            return service.locationGrantMethod
         }
     }
 
@@ -117,6 +121,7 @@ struct PermissionsSettingsView: View {
         case .finderAutomation: return "Request Finder Access"
         case .accessibility: return "Request Accessibility Access"
         case .screenCapture: return "Request Screen Recording Access"
+        case .location: return "Request Location Access"
         }
     }
 }

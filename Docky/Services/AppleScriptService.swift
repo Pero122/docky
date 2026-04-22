@@ -168,7 +168,7 @@ final class AppleScriptService {
                     PermissionsService.shared.updateFinderAutomation(status: .denied)
                 case .accessibility:
                     PermissionsService.shared.refresh()
-                case .userFolders, .screenCapture:
+                case .userFolders, .screenCapture, .location:
                     break
                 }
             }
@@ -208,7 +208,7 @@ final class AppleScriptService {
             PermissionsService.shared.updateFinderAutomation(status: .granted)
         case .accessibility:
             PermissionsService.shared.refresh()
-        case .userFolders, .screenCapture:
+        case .userFolders, .screenCapture, .location:
             break
         }
     }

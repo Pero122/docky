@@ -192,7 +192,12 @@ private struct DockEditorOverlayView: View {
     }
 
     private var paletteItems: [DockEditPaletteItem] {
-        var items: [DockEditPaletteItem] = [.spacer, .divider, .smartStack]
+        var items: [DockEditPaletteItem] = [
+            .spacer,
+            .divider,
+            .widget(ownerBundleIdentifier: WeatherService.widgetOwnerBundleIdentifier, kind: .weather),
+            .smartStack
+        ]
         items.append(contentsOf: mediaPlayback.statesByBundleIdentifier.values
             .filter(\.hasContent)
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
@@ -320,8 +325,13 @@ private struct PaletteItemView: View {
             "rectangle.split.3x1"
         case .divider:
             "line.3.horizontal.decrease"
-        case .widget:
-            "waveform"
+        case .widget(_, let kind):
+            switch kind {
+            case .nowPlaying:
+                "waveform"
+            case .weather:
+                "cloud.sun.fill"
+            }
         case .smartStack:
             "square.stack.3d.up"
         }
@@ -346,8 +356,13 @@ private struct PaletteItemView: View {
             "Adds breathing room between pinned tiles"
         case .divider:
             "Adds a visual separator inside pinned tiles"
-        case .widget:
-            "Adds a now playing widget inline"
+        case .widget(_, let kind):
+            switch kind {
+            case .nowPlaying:
+                "Adds a now playing widget inline"
+            case .weather:
+                "Shows current weather for your location"
+            }
         case .smartStack:
             "Adds a stack of available media widgets"
         }

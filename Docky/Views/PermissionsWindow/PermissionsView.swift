@@ -29,7 +29,7 @@ struct PermissionsView: View {
         .frame(width: 520, height: 420)
         .onAppear { service.refresh() }
         .task(id: currentIndex) {
-            guard step == .finderAutomation, status == .notDetermined else { return }
+            guard (step == .finderAutomation || step == .location), status == .notDetermined else { return }
             _ = await service.requestPermission(for: step)
         }
     }
@@ -77,7 +77,7 @@ struct PermissionsView: View {
             Button(systemSettingsButtonTitle) {
                 service.openSystemSettings(for: step)
             }
-            if step == .finderAutomation || step == .screenCapture {
+            if step == .finderAutomation || step == .screenCapture || step == .location {
                 requestButton
             }
         }
@@ -87,7 +87,7 @@ struct PermissionsView: View {
         switch step {
         case .userFolders, .accessibility:
             true
-        case .finderAutomation, .screenCapture:
+        case .finderAutomation, .screenCapture, .location:
             false
         }
     }
@@ -153,13 +153,14 @@ struct PermissionsView: View {
         case .automation: return "Automation"
         case .accessibility: return "Accessibility"
         case .screenCapture: return "Screen Recording"
+        case .location: return "Location"
         case .none: return nil
         }
     }
 
     @ViewBuilder
     private var requestButton: some View {
-        if step == .finderAutomation || step == .screenCapture {
+        if step == .finderAutomation || step == .screenCapture || step == .location {
             Button(requestButtonTitle) {
                 Task {
                     _ = await service.requestPermission(for: step)
@@ -178,6 +179,8 @@ struct PermissionsView: View {
             return service.accessibilityGrantMethod
         case .screenCapture:
             return service.screenCaptureGrantMethod
+        case .location:
+            return service.locationGrantMethod
         }
     }
 
@@ -191,6 +194,8 @@ struct PermissionsView: View {
             return "Open System Settings (Accessibility)"
         case .screenCapture:
             return "Open System Settings (Screen Recording)"
+        case .location:
+            return "Open System Settings (Location Services)"
         }
     }
 
@@ -200,6 +205,8 @@ struct PermissionsView: View {
             return "Request Finder Access"
         case .screenCapture:
             return "Request Screen Recording Access"
+        case .location:
+            return "Request Location Access"
         case .userFolders, .accessibility:
             return "Request Access"
         }

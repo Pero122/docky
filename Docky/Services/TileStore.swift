@@ -1193,7 +1193,15 @@ final class TileStore: ObservableObject {
     }
 
     private func allSmartStackWidgets() -> [WidgetTile] {
-        mediaPlayback.statesByBundleIdentifier.values
+        let weatherWidgets = [
+            Self.makeWidgetTile(
+                kind: .weather,
+                ownerBundleIdentifier: WeatherService.widgetOwnerBundleIdentifier,
+                span: .three
+            )
+        ]
+
+        let nowPlayingWidgets = mediaPlayback.statesByBundleIdentifier.values
             .filter(\.hasContent)
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             .map { state in
@@ -1203,6 +1211,8 @@ final class TileStore: ObservableObject {
                     span: .three
                 )
             }
+
+        return weatherWidgets + nowPlayingWidgets
     }
 
     private func visibleSmartStackWidgets(hiddenOwnerBundleIdentifiers: [String]) -> [WidgetTile] {

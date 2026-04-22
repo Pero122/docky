@@ -775,6 +775,35 @@ struct TileView: View {
                 })
             }
             return actions
+        case .weather:
+            var actions: [ContextAction] = [
+                .action("Refresh Weather") {
+                    WeatherService.shared.refresh(force: true)
+                }
+            ]
+
+            if isDockyPinnedTile || isDockyTrailingTile {
+                actions.append(.divider)
+                actions.append(.submenu("Span", children: TileSpan.allCases.map { span in
+                    ContextAction.action(spanTitle(for: span), isOn: widget.span == span) {
+                        if isDockyPinnedTile {
+                            TileStore.shared.setPinnedWidgetSpan(tileID: tile.id, span: span)
+                        } else if isDockyTrailingTile {
+                            TileStore.shared.setTrailingWidgetSpan(tileID: tile.id, span: span)
+                        }
+                    }
+                }))
+            }
+
+            actions.append(.divider)
+            actions.append(.action("Open Weather") {
+                WeatherService.shared.openInWeatherApp()
+            })
+            actions.append(.divider)
+            actions.append(.action("Remove from Dock") {
+                removeDockyTile()
+            })
+            return actions
         }
     }
 
@@ -824,6 +853,8 @@ struct TileView: View {
             Task {
                 await mediaPlayback.togglePlayPause(for: widget.ownerBundleIdentifier)
             }
+        case .weather:
+            WeatherService.shared.openInWeatherApp()
         }
     }
 

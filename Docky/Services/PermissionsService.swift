@@ -16,6 +16,7 @@
 import AppKit
 import ApplicationServices
 import Combine
+import CoreLocation
 
 enum PermissionStatus {
     case granted
@@ -28,6 +29,7 @@ enum GrantMethod {
     case automation
     case accessibility
     case screenCapture
+    case location
 }
 
 enum Permission: String, CaseIterable, Identifiable {
@@ -35,6 +37,7 @@ enum Permission: String, CaseIterable, Identifiable {
     case finderAutomation
     case accessibility
     case screenCapture
+    case location
 
     var id: String { rawValue }
 
@@ -44,6 +47,7 @@ enum Permission: String, CaseIterable, Identifiable {
         case .finderAutomation: return "Finder Automation"
         case .accessibility: return "Accessibility"
         case .screenCapture: return "Screen Recording"
+        case .location: return "Location"
         }
     }
 
@@ -57,6 +61,8 @@ enum Permission: String, CaseIterable, Identifiable {
             return "Accessibility access lets Docky click menu bar items for curated menuClick actions and inspect minimized windows so it can restore them beside the Trash. These actions are slower and more fragile than built-in actions, so Docky requests this only when needed."
         case .screenCapture:
             return "Grant Screen Recording so Docky can show thumbnail previews for minimized windows. Docky only captures the minimized window itself for its dock tile, and nothing leaves your Mac. macOS may require quitting and reopening Docky after you allow this."
+        case .location:
+            return "Grant location access so Docky can show local weather in the Weather widget. Your location is used on-device to fetch the forecast and is not stored by Docky."
         }
     }
 
@@ -70,6 +76,8 @@ enum Permission: String, CaseIterable, Identifiable {
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         case .screenCapture:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        case .location:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
         }
     }
 
@@ -83,6 +91,8 @@ enum Permission: String, CaseIterable, Identifiable {
             return true
         case .screenCapture:
             return true
+        case .location:
+            return false
         }
     }
 }
@@ -102,6 +112,9 @@ final class PermissionsService: ObservableObject {
     @Published private(set) var screenCapture: PermissionStatus = .notDetermined
     @Published private(set) var screenCaptureGrantMethod: GrantMethod?
 
+    @Published private(set) var location: PermissionStatus = .notDetermined
+    @Published private(set) var locationGrantMethod: GrantMethod?
+
     private let dockBookmarkKey = "docky.dockPlistBookmark"
     private let userFoldersBookmarkKey = "docky.userFoldersBookmark"
     private let finderAutomationStatusKey = "docky.finderAutomationStatus"
@@ -119,6 +132,7 @@ final class PermissionsService: ObservableObject {
         case .finderAutomation: return finderAutomation
         case .accessibility: return accessibility
         case .screenCapture: return screenCapture
+        case .location: return location
         }
     }
 
@@ -151,6 +165,7 @@ final class PermissionsService: ObservableObject {
         refreshFinderAutomation()
         refreshAccessibility()
         refreshScreenCapture()
+        refreshLocation()
     }
 
     // MARK: - Grant actions
@@ -168,6 +183,8 @@ final class PermissionsService: ObservableObject {
             return requestAccessibilityPermission(prompt: true)
         case .screenCapture:
             return requestScreenCapturePermission()
+        case .location:
+            return await WeatherService.shared.requestLocationPermission()
         case .userFolders:
             return false
         }
@@ -258,6 +275,31 @@ final class PermissionsService: ObservableObject {
         let granted = CGPreflightScreenCaptureAccess()
         screenCapture = granted ? .granted : .denied
         screenCaptureGrantMethod = granted ? .screenCapture : nil
+    }
+
+    private func refreshLocation() {
+        WeatherService.shared.refreshAuthorizationStatus()
+
+        if WeatherService.shared.hasLocationAuthorization {
+            location = .granted
+            locationGrantMethod = .location
+            return
+        }
+
+        switch WeatherService.shared.authorizationStatus {
+        case .notDetermined:
+            location = .notDetermined
+            locationGrantMethod = nil
+        case .denied, .restricted:
+            location = .denied
+            locationGrantMethod = nil
+        case .authorizedAlways:
+            location = .granted
+            locationGrantMethod = .location
+        @unknown default:
+            location = .denied
+            locationGrantMethod = nil
+        }
     }
 
     // MARK: - Full Disk Access probe
