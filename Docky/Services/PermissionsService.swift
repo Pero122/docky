@@ -118,6 +118,7 @@ final class PermissionsService: ObservableObject {
     private let dockBookmarkKey = "docky.dockPlistBookmark"
     private let userFoldersBookmarkKey = "docky.userFoldersBookmark"
     private let finderAutomationStatusKey = "docky.finderAutomationStatus"
+    private let initialOnboardingCompletedKey = "docky.initialOnboardingCompleted"
 
     private init() {
         clearLegacyBookmarks()
@@ -149,6 +150,11 @@ final class PermissionsService: ObservableObject {
             if $0.isRequiredAtLaunch {
                 return status(for: $0) != .granted
             }
+
+            if hasCompletedInitialOnboarding {
+                return false
+            }
+
             return status(for: $0) == .notDetermined
         }
     }
@@ -159,6 +165,10 @@ final class PermissionsService: ObservableObject {
 
     var setupComplete: Bool { setupPermissions.isEmpty }
 
+    var hasCompletedInitialOnboarding: Bool {
+        UserDefaults.standard.bool(forKey: initialOnboardingCompletedKey)
+    }
+
     func refresh() {
         let fdaGranted = checkFullDiskAccess()
         refreshUserFolders(fdaGranted: fdaGranted)
@@ -166,6 +176,10 @@ final class PermissionsService: ObservableObject {
         refreshAccessibility()
         refreshScreenCapture()
         refreshLocation()
+    }
+
+    func markInitialOnboardingCompleted() {
+        UserDefaults.standard.set(true, forKey: initialOnboardingCompletedKey)
     }
 
     // MARK: - Grant actions

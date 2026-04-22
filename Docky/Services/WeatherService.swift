@@ -88,8 +88,13 @@ final class WeatherService: NSObject, ObservableObject {
         case .authorizedAlways:
             requestLocation()
         case .notDetermined:
-            isAwaitingLocation = true
-            locationManager.requestWhenInUseAuthorization()
+            if PermissionsService.shared.hasCompletedInitialOnboarding {
+                snapshot = nil
+                lastErrorDescription = "Enable location in Settings to show local weather."
+            } else {
+                isAwaitingLocation = true
+                locationManager.requestWhenInUseAuthorization()
+            }
         case .denied, .restricted:
             snapshot = nil
             lastErrorDescription = "Location access is needed for local weather."
@@ -264,7 +269,7 @@ extension WeatherService: CLLocationManagerDelegate {
         case .notDetermined, .denied, .restricted:
             return false
         @unknown default:
-            return false
+            return true
         }
         #else
         switch status {

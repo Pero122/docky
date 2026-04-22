@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         PermissionsService.shared.refresh()
         if PermissionsService.shared.setupComplete {
+            PermissionsService.shared.markInitialOnboardingCompleted()
             showMainWindow()
         } else {
             showPermissionsWindow(steps: PermissionsService.shared.setupPermissions)
@@ -63,6 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = PermissionsWindowController(steps: steps)
         controller.onComplete = { [weak self] in
             NSApp.setActivationPolicy(.accessory)
+            PermissionsService.shared.markInitialOnboardingCompleted()
             self?.permissionsWindowController = nil
             self?.showMainWindow()
         }
