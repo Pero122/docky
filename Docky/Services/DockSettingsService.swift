@@ -70,7 +70,8 @@ final class DockSettingsService: ObservableObject {
             largeSize = CGFloat(value)
         }
         if let value = (values["magnification"] as? NSNumber)?.boolValue {
-            magnification = value
+            // TODO: implement magnification
+//            magnification = value
         }
         if let value = (values["autohide"] as? NSNumber)?.boolValue {
             autohide = value
