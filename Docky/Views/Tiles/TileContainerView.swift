@@ -249,6 +249,15 @@ struct TileContainerView: View {
         expandedPinnedTiles(from: previewPinnedBaseTiles)
     }
 
+    private var draggedAppFolderIdentifier: String? {
+        guard let draggedTile,
+              case .appFolder(let folder) = draggedTile.content else {
+            return nil
+        }
+
+        return folder.identifier
+    }
+
     private var previewPinnedBaseTiles: [Tile] {
         guard let destinationIndex = activePinnedDropDestinationIndex else {
             return pinnedTiles
@@ -275,6 +284,10 @@ struct TileContainerView: View {
 
             guard preferences.showsGroupedOpenedAppsInDock,
                   case .appFolder(let folder) = tile.content else {
+                continue
+            }
+
+            guard folder.identifier != draggedAppFolderIdentifier else {
                 continue
             }
 
