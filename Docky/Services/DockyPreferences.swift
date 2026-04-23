@@ -311,20 +311,24 @@ enum ResolvedDockWindowPosition {
 }
 
 enum DockTileIndicatorShape: String, CaseIterable, Identifiable {
+    case none
     case dot
     case pill
+    case image
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .none: "None"
         case .dot: "Dot"
         case .pill: "Pill"
+        case .image: "Custom Image"
         }
     }
 }
 
-struct DockWindowTintColor: Codable, Equatable {
+struct DockColor: Codable, Equatable {
     let red: Double
     let green: Double
     let blue: Double
@@ -395,7 +399,7 @@ final class DockyPreferences: ObservableObject {
     }
 
     /// Optional tint override for the main dock window. `nil` follows the system material tint.
-    @Published var windowTintColor: DockWindowTintColor? {
+    @Published var windowTintColor: DockColor? {
         didSet {
             guard windowTintColor != oldValue else { return }
             persistWindowTintColor(windowTintColor)
@@ -444,6 +448,27 @@ final class DockyPreferences: ObservableObject {
         didSet {
             guard activeIndicatorShape != oldValue else { return }
             defaults.set(activeIndicatorShape.rawValue, forKey: Keys.activeIndicatorShape)
+        }
+    }
+
+    /// Optional image path used for the custom active app indicator.
+    @Published var activeIndicatorImagePath: String? {
+        didSet {
+            guard activeIndicatorImagePath != oldValue else { return }
+
+            if let activeIndicatorImagePath, !activeIndicatorImagePath.isEmpty {
+                defaults.set(activeIndicatorImagePath, forKey: Keys.activeIndicatorImagePath)
+            } else {
+                defaults.removeObject(forKey: Keys.activeIndicatorImagePath)
+            }
+        }
+    }
+
+    /// Optional color override used for dot and pill active app indicators.
+    @Published var activeIndicatorColor: DockColor? {
+        didSet {
+            guard activeIndicatorColor != oldValue else { return }
+            persistActiveIndicatorColor(activeIndicatorColor)
         }
     }
 
@@ -502,6 +527,10 @@ final class DockyPreferences: ObservableObject {
         windowTintColor?.nsColor ?? Self.defaultWindowTintColor
     }
 
+    var effectiveActiveIndicatorColor: NSColor {
+        activeIndicatorColor?.nsColor ?? .labelColor
+    }
+
     var effectiveWindowTintOpacity: CGFloat {
         min(max(windowTintOpacity, 0), 1)
     }
@@ -518,6 +547,18 @@ final class DockyPreferences: ObservableObject {
         return URL(fileURLWithPath: windowBackgroundImagePath)
     }
 
+    var effectiveActiveIndicatorImageURL: URL? {
+        guard let activeIndicatorImagePath, !activeIndicatorImagePath.isEmpty else {
+            return nil
+        }
+
+        guard FileManager.default.fileExists(atPath: activeIndicatorImagePath) else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: activeIndicatorImagePath)
+    }
+
     static var defaultWindowTintColor: NSColor {
         NSColor.windowBackgroundColor.blended(withFraction: 0.18, of: .black) ?? .windowBackgroundColor
     }
@@ -532,6 +573,8 @@ final class DockyPreferences: ObservableObject {
         static let windowPosition = "docky.windowPosition"
         static let autohidesWindow = "docky.autohidesWindow"
         static let activeIndicatorShape = "docky.activeIndicatorShape"
+        static let activeIndicatorImagePath = "docky.activeIndicatorImagePath"
+        static let activeIndicatorColor = "docky.activeIndicatorColor"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
         static let pinnedItems = "docky.pinnedItems"
@@ -543,12 +586,14 @@ final class DockyPreferences: ObservableObject {
         static let tileVerticalPadding: CGFloat = 16
         static let tileSpacing: CGFloat = 0
         static let windowCornerRadius: CGFloat = 24
-        static let windowTintColor: DockWindowTintColor? = nil
+        static let windowTintColor: DockColor? = nil
         static let windowTintOpacity: CGFloat = 0.22
         static let windowBackgroundImagePath: String? = nil
         static let windowPosition: DockWindowPosition = .system
         static let autohidesWindow = false
         static let activeIndicatorShape: DockTileIndicatorShape = .dot
+        static let activeIndicatorImagePath: String? = nil
+        static let activeIndicatorColor: DockColor? = nil
         static let showsGroupedOpenedAppsInDock = true
         static let pinnedAppBundleIdentifiers: [String] = []
         static let pinnedItems: [PinnedTileItem] = []
@@ -567,6 +612,8 @@ final class DockyPreferences: ObservableObject {
         let storedWindowPosition = defaults.string(forKey: Keys.windowPosition)
         let storedAutohidesWindow = defaults.object(forKey: Keys.autohidesWindow) as? Bool
         let storedActiveIndicatorShape = defaults.string(forKey: Keys.activeIndicatorShape)
+        let storedActiveIndicatorImagePath = defaults.string(forKey: Keys.activeIndicatorImagePath)
+        let storedActiveIndicatorColor = defaults.data(forKey: Keys.activeIndicatorColor)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
         let storedPinnedItems = defaults.data(forKey: Keys.pinnedItems)
@@ -578,12 +625,14 @@ final class DockyPreferences: ObservableObject {
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
-        self.windowTintColor = Self.decodeWindowTintColor(from: storedWindowTintColor) ?? DefaultValues.windowTintColor
+        self.windowTintColor = Self.decodeColor(from: storedWindowTintColor) ?? DefaultValues.windowTintColor
         self.windowTintOpacity = storedWindowTintOpacity.map { CGFloat($0) } ?? DefaultValues.windowTintOpacity
         self.windowBackgroundImagePath = storedWindowBackgroundImagePath ?? DefaultValues.windowBackgroundImagePath
         self.windowPosition = (storedWindowPosition.flatMap(DockWindowPosition.init(rawValue:)) ?? DefaultValues.windowPosition)
         self.autohidesWindow = storedAutohidesWindow ?? DefaultValues.autohidesWindow
         self.activeIndicatorShape = (storedActiveIndicatorShape.flatMap(DockTileIndicatorShape.init(rawValue:)) ?? DefaultValues.activeIndicatorShape)
+        self.activeIndicatorImagePath = storedActiveIndicatorImagePath ?? DefaultValues.activeIndicatorImagePath
+        self.activeIndicatorColor = Self.decodeColor(from: storedActiveIndicatorColor) ?? DefaultValues.activeIndicatorColor
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.pinnedAppBundleIdentifiers = initialPinnedAppBundleIdentifiers
         self.pinnedItems = initialPinnedItems
@@ -601,6 +650,8 @@ final class DockyPreferences: ObservableObject {
         windowPosition = DefaultValues.windowPosition
         autohidesWindow = DefaultValues.autohidesWindow
         activeIndicatorShape = DefaultValues.activeIndicatorShape
+        activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
+        activeIndicatorColor = DefaultValues.activeIndicatorColor
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         pinnedAppBundleIdentifiers = DefaultValues.pinnedAppBundleIdentifiers
         pinnedItems = DefaultValues.pinnedItems
@@ -635,7 +686,7 @@ final class DockyPreferences: ObservableObject {
         defaults.set(data, forKey: Keys.trailingItems)
     }
 
-    private func persistWindowTintColor(_ color: DockWindowTintColor?) {
+    private func persistWindowTintColor(_ color: DockColor?) {
         guard let color else {
             defaults.removeObject(forKey: Keys.windowTintColor)
             return
@@ -649,12 +700,26 @@ final class DockyPreferences: ObservableObject {
         defaults.set(data, forKey: Keys.windowTintColor)
     }
 
-    private static func decodeWindowTintColor(from data: Data?) -> DockWindowTintColor? {
+    private func persistActiveIndicatorColor(_ color: DockColor?) {
+        guard let color else {
+            defaults.removeObject(forKey: Keys.activeIndicatorColor)
+            return
+        }
+
+        guard let data = try? encoder.encode(color) else {
+            defaults.removeObject(forKey: Keys.activeIndicatorColor)
+            return
+        }
+
+        defaults.set(data, forKey: Keys.activeIndicatorColor)
+    }
+
+    private static func decodeColor(from data: Data?) -> DockColor? {
         guard let data else {
             return nil
         }
 
-        return try? JSONDecoder().decode(DockWindowTintColor.self, from: data)
+        return try? JSONDecoder().decode(DockColor.self, from: data)
     }
 
     private static func decodeWidgetPlacements(from data: Data?) -> [WidgetPlacement]? {

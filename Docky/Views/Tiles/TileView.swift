@@ -284,9 +284,24 @@ struct TileView: View {
     @ViewBuilder
     private var runningIndicator: some View {
         if showsRunningIndicator {
-            runningIndicatorShape
-                .frame(width: runningIndicatorSize.width, height: runningIndicatorSize.height)
-                .foregroundStyle(.primary.opacity(0.9))
+            switch preferences.activeIndicatorShape {
+            case .none:
+                EmptyView()
+            case .dot, .pill:
+                runningIndicatorShape
+                    .frame(width: runningIndicatorSize.width, height: runningIndicatorSize.height)
+                    .foregroundStyle(Color(nsColor: preferences.effectiveActiveIndicatorColor).opacity(0.9))
+            case .image:
+                if let runningIndicatorImage {
+                    Image(nsImage: runningIndicatorImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(
+                            maxWidth: runningIndicatorSize.width,
+                            maxHeight: runningIndicatorSize.height
+                        )
+                }
+            }
         }
     }
 
@@ -308,6 +323,8 @@ struct TileView: View {
     @ViewBuilder
     private var runningIndicatorShape: some View {
         switch preferences.activeIndicatorShape {
+        case .none, .image:
+            EmptyView()
         case .dot:
             Circle()
         case .pill:
@@ -317,6 +334,8 @@ struct TileView: View {
 
     private var runningIndicatorSize: CGSize {
         switch preferences.activeIndicatorShape {
+        case .none:
+            .zero
         case .dot:
             CGSize(width: runningIndicatorThickness, height: runningIndicatorThickness)
         case .pill:
@@ -324,6 +343,12 @@ struct TileView: View {
                 CGSize(width: runningIndicatorThickness, height: runningIndicatorLength)
             } else {
                 CGSize(width: runningIndicatorLength, height: runningIndicatorThickness)
+            }
+        case .image:
+            if position.isVertical {
+                CGSize(width: runningIndicatorImageThickness, height: runningIndicatorImageLength)
+            } else {
+                CGSize(width: runningIndicatorImageLength, height: runningIndicatorImageThickness)
             }
         }
     }
@@ -336,12 +361,28 @@ struct TileView: View {
         12 * runningIndicatorScale
     }
 
+    private var runningIndicatorImageThickness: CGFloat {
+        10 * runningIndicatorScale
+    }
+
+    private var runningIndicatorImageLength: CGFloat {
+        20 * runningIndicatorScale
+    }
+
     private var runningIndicatorInset: CGFloat {
         max(1, round(2 * runningIndicatorScale))
     }
 
     private var runningIndicatorScale: CGFloat {
         max(0.5, min(1, effectiveTileSize / 48))
+    }
+
+    private var runningIndicatorImage: NSImage? {
+        guard let url = preferences.effectiveActiveIndicatorImageURL else {
+            return nil
+        }
+
+        return NSImage(contentsOf: url)
     }
 
     private var contentPadding: CGFloat {

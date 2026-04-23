@@ -25,7 +25,35 @@ struct AppearanceSettingsView: View {
                     }
                     .pickerStyle(.menu)
 
-                    Text("Choose whether running apps are marked with the classic dot or a pill.")
+                    if preferences.activeIndicatorShape == .image {
+                        HStack {
+                            Button("Choose Image...") {
+                                chooseActiveIndicatorImage()
+                            }
+
+                            if preferences.activeIndicatorImagePath != nil {
+                                Button("Clear") {
+                                    preferences.activeIndicatorImagePath = nil
+                                }
+                            }
+                        }
+
+                        if let selectedActiveIndicatorImageName {
+                            Text(selectedActiveIndicatorImageName)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if showsIndicatorColorControls {
+                        Toggle("Use Custom Indicator Color", isOn: usesCustomActiveIndicatorColorBinding)
+                            .font(.headline)
+
+                        if preferences.activeIndicatorColor != nil {
+                            ColorPicker("Indicator Color", selection: activeIndicatorColorBinding, supportsOpacity: false)
+                        }
+                    }
+
+                    Text("Choose whether running apps use no marker, the classic dot, a pill, or a custom image.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -184,7 +212,7 @@ struct AppearanceSettingsView: View {
             get: { preferences.windowTintColor != nil },
             set: { usesCustomTint in
                 preferences.windowTintColor = usesCustomTint
-                    ? (preferences.windowTintColor ?? DockWindowTintColor(nsColor: preferences.effectiveWindowTintColor))
+                    ? (preferences.windowTintColor ?? DockColor(nsColor: preferences.effectiveWindowTintColor))
                     : nil
             }
         )
@@ -194,11 +222,44 @@ struct AppearanceSettingsView: View {
         Binding(
             get: { Color(nsColor: preferences.effectiveWindowTintColor) },
             set: { newValue in
-                guard let tintColor = DockWindowTintColor(nsColor: NSColor(newValue)) else {
+                guard let tintColor = DockColor(nsColor: NSColor(newValue)) else {
                     return
                 }
 
                 preferences.windowTintColor = tintColor
+            }
+        )
+    }
+
+    private var showsIndicatorColorControls: Bool {
+        switch preferences.activeIndicatorShape {
+        case .dot, .pill:
+            true
+        case .none, .image:
+            false
+        }
+    }
+
+    private var usesCustomActiveIndicatorColorBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.activeIndicatorColor != nil },
+            set: { usesCustomColor in
+                preferences.activeIndicatorColor = usesCustomColor
+                    ? (preferences.activeIndicatorColor ?? DockColor(nsColor: preferences.effectiveActiveIndicatorColor))
+                    : nil
+            }
+        )
+    }
+
+    private var activeIndicatorColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(nsColor: preferences.effectiveActiveIndicatorColor) },
+            set: { newValue in
+                guard let indicatorColor = DockColor(nsColor: NSColor(newValue)) else {
+                    return
+                }
+
+                preferences.activeIndicatorColor = indicatorColor
             }
         )
     }
@@ -220,6 +281,29 @@ struct AppearanceSettingsView: View {
         }
 
         return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private var selectedActiveIndicatorImageName: String? {
+        guard let path = preferences.activeIndicatorImagePath, !path.isEmpty else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    private func chooseActiveIndicatorImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.prompt = "Choose Image"
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        preferences.activeIndicatorImagePath = url.path
     }
 
     private func chooseWindowBackgroundImage() {
