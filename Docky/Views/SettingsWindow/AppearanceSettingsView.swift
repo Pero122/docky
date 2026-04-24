@@ -62,6 +62,23 @@ struct AppearanceSettingsView: View {
 
             Section("Tile Layout") {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Tile Clip Shape")
+                        .font(.headline)
+
+                    Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
+                        ForEach(DockClipShape.allCases) { shape in
+                            Text(shape.title).tag(shape)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Tile Vertical Padding")
                         .font(.headline)
 
@@ -102,6 +119,23 @@ struct AppearanceSettingsView: View {
 
             Section("Window Shape") {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Chrome Clip Shape")
+                        .font(.headline)
+
+                    Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
+                        ForEach(DockClipShape.allCases) { shape in
+                            Text(shape.title).tag(shape)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Choose whether the dock chrome keeps the current rounded corners or uses a full circle or capsule clip.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Window Corner Radius")
                         .font(.headline)
 
@@ -114,11 +148,12 @@ struct AppearanceSettingsView: View {
                             .frame(width: 48, alignment: .trailing)
                     }
 
-                    Text("Controls the roundness of the main dock window and its border, up to a full capsule.")
+                    Text(windowCornerRadiusDescription)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
+                .disabled(preferences.windowClipShape == .circle)
             }
 
             Section("Window Background") {
@@ -205,6 +240,15 @@ struct AppearanceSettingsView: View {
             get: { min(preferences.windowCornerRadius, maximumCornerRadius) },
             set: { preferences.windowCornerRadius = $0 }
         )
+    }
+
+    private var windowCornerRadiusDescription: String {
+        switch preferences.windowClipShape {
+        case .rounded:
+            "Controls the roundness of the main dock window and its border, up to a full capsule."
+        case .circle:
+            "Circle mode uses the maximum radius automatically, so square chrome becomes circular and wider chrome becomes a capsule."
+        }
     }
 
     private var usesCustomWindowTintBinding: Binding<Bool> {

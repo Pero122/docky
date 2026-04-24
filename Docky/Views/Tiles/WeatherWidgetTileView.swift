@@ -123,6 +123,7 @@ struct WeatherWidgetTileView: View {
             }
         }
         .padding(layout.contentPadding)
+        .padding(.horizontal, (cornerRadius - layout.contentPadding) / 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
@@ -153,6 +154,7 @@ struct WeatherWidgetTileView: View {
             }
         }
         .padding(layout.contentPadding)
+        .padding(.horizontal, (cornerRadius - layout.contentPadding) / 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

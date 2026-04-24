@@ -319,6 +319,29 @@ enum DockWindowPosition: String, CaseIterable, Identifiable {
     }
 }
 
+enum DockClipShape: String, CaseIterable, Identifiable {
+    case rounded
+    case circle
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .rounded: "Rounded"
+        case .circle: "Circle"
+        }
+    }
+
+    func resolvedCornerRadius(base: CGFloat, maximum: CGFloat) -> CGFloat {
+        switch self {
+        case .rounded:
+            min(base, maximum)
+        case .circle:
+            maximum
+        }
+    }
+}
+
 enum ResolvedDockWindowPosition {
     case top
     case left
@@ -452,11 +475,27 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Clip shape applied to Docky-rendered tile chrome.
+    @Published var tileClipShape: DockClipShape {
+        didSet {
+            guard tileClipShape != oldValue else { return }
+            defaults.set(tileClipShape.rawValue, forKey: Keys.tileClipShape)
+        }
+    }
+
     /// Corner radius applied to the main dock window.
     @Published var windowCornerRadius: CGFloat {
         didSet {
             guard windowCornerRadius != oldValue else { return }
             defaults.set(Double(windowCornerRadius), forKey: Keys.windowCornerRadius)
+        }
+    }
+
+    /// Clip shape applied to the main dock chrome.
+    @Published var windowClipShape: DockClipShape {
+        didSet {
+            guard windowClipShape != oldValue else { return }
+            defaults.set(windowClipShape.rawValue, forKey: Keys.windowClipShape)
         }
     }
 
@@ -628,7 +667,9 @@ final class DockyPreferences: ObservableObject {
     private enum Keys {
         static let tileVerticalPadding = "docky.tileVerticalPadding"
         static let tileSpacing = "docky.tileSpacing"
+        static let tileClipShape = "docky.tileClipShape"
         static let windowCornerRadius = "docky.windowCornerRadius"
+        static let windowClipShape = "docky.windowClipShape"
         static let windowTintColor = "docky.windowTintColor"
         static let windowTintOpacity = "docky.windowTintOpacity"
         static let windowBackgroundImagePath = "docky.windowBackgroundImagePath"
@@ -645,9 +686,11 @@ final class DockyPreferences: ObservableObject {
     }
 
     private enum DefaultValues {
-        static let tileVerticalPadding: CGFloat = 16
+        static let tileVerticalPadding: CGFloat = 8
         static let tileSpacing: CGFloat = 0
+        static let tileClipShape: DockClipShape = .rounded
         static let windowCornerRadius: CGFloat = 24
+        static let windowClipShape: DockClipShape = .rounded
         static let windowTintColor: DockColor? = nil
         static let windowTintOpacity: CGFloat = 0.22
         static let windowBackgroundImagePath: String? = nil
@@ -667,7 +710,9 @@ final class DockyPreferences: ObservableObject {
         self.defaults = .standard
         let storedVerticalPadding = defaults.object(forKey: Keys.tileVerticalPadding) as? Double
         let storedTileSpacing = defaults.object(forKey: Keys.tileSpacing) as? Double
+        let storedTileClipShape = defaults.string(forKey: Keys.tileClipShape)
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
+        let storedWindowClipShape = defaults.string(forKey: Keys.windowClipShape)
         let storedWindowTintColor = defaults.data(forKey: Keys.windowTintColor)
         let storedWindowTintOpacity = defaults.object(forKey: Keys.windowTintOpacity) as? Double
         let storedWindowBackgroundImagePath = defaults.string(forKey: Keys.windowBackgroundImagePath)
@@ -686,7 +731,9 @@ final class DockyPreferences: ObservableObject {
             ?? initialPinnedAppBundleIdentifiers.map(PinnedTileItem.app(bundleIdentifier:))
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
+        self.tileClipShape = (storedTileClipShape.flatMap(DockClipShape.init(rawValue:)) ?? DefaultValues.tileClipShape)
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
+        self.windowClipShape = (storedWindowClipShape.flatMap(DockClipShape.init(rawValue:)) ?? DefaultValues.windowClipShape)
         self.windowTintColor = Self.decodeColor(from: storedWindowTintColor) ?? DefaultValues.windowTintColor
         self.windowTintOpacity = storedWindowTintOpacity.map { CGFloat($0) } ?? DefaultValues.windowTintOpacity
         self.windowBackgroundImagePath = storedWindowBackgroundImagePath ?? DefaultValues.windowBackgroundImagePath
@@ -705,7 +752,9 @@ final class DockyPreferences: ObservableObject {
     func resetToDefaults() {
         tileVerticalPadding = DefaultValues.tileVerticalPadding
         tileSpacing = DefaultValues.tileSpacing
+        tileClipShape = DefaultValues.tileClipShape
         windowCornerRadius = DefaultValues.windowCornerRadius
+        windowClipShape = DefaultValues.windowClipShape
         windowTintColor = DefaultValues.windowTintColor
         windowTintOpacity = DefaultValues.windowTintOpacity
         windowBackgroundImagePath = DefaultValues.windowBackgroundImagePath
@@ -715,10 +764,6 @@ final class DockyPreferences: ObservableObject {
         activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
         activeIndicatorColor = DefaultValues.activeIndicatorColor
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
-        pinnedAppBundleIdentifiers = DefaultValues.pinnedAppBundleIdentifiers
-        pinnedItems = DefaultValues.pinnedItems
-        widgetPlacements = DefaultValues.widgetPlacements
-        trailingItems = DefaultValues.trailingItems
     }
 
     private func persistPinnedItems(_ items: [PinnedTileItem]) {

@@ -245,7 +245,7 @@ struct TileView: View {
             .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
                     .padding(runningIndicatorEdge, runningIndicatorInset)
-                    .offset(y: -2)
+                    .offset(y: -max((preferences.tileVerticalPadding / 2), 2))
             }
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
@@ -481,10 +481,14 @@ struct TileView: View {
     private var nonAppContentPadding: CGFloat {
         switch tile.content {
         case .appFolder, .widget, .smartStack, .folder, .trash:
-            floor(effectiveTileSize * 3 / 32)
+            tileChromeInset
         case .app, .minimizedWindow, .spacer, .divider:
             0
         }
+    }
+
+    private var tileChromeInset: CGFloat {
+        floor(effectiveTileSize * 3 / 32)
     }
 
     private var contentInsets: CGSize {
@@ -511,7 +515,11 @@ struct TileView: View {
     }
 
     private var nonAppTileCornerRadius: CGFloat {
-        effectiveTileSize * 0.225
+        let maximumCornerRadius = max(0, (effectiveTileSize - nonAppContentPadding * 2) / 2)
+        return preferences.tileClipShape.resolvedCornerRadius(
+            base: effectiveTileSize * 0.225,
+            maximum: maximumCornerRadius
+        )
     }
 
     private var position: ResolvedDockWindowPosition {
@@ -565,7 +573,11 @@ struct TileView: View {
     private var content: some View {
         switch tile.content {
         case .app(let app):
-            AppTileView(tile: app)
+            AppTileView(
+                tile: app,
+                clipShape: preferences.tileClipShape,
+                transparencyCompensationInset: tileChromeInset
+            )
         case .minimizedWindow(let window):
             MinimizedWindowTileView(tile: window)
         case .appFolder(let folder):

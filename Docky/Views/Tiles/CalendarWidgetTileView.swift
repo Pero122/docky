@@ -135,6 +135,7 @@ struct CalendarWidgetTileView: View {
             Spacer(minLength: 0)
         }
         .padding(layout.contentPadding)
+        .padding(.horizontal, (cornerRadius - layout.contentPadding) / 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 

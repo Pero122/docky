@@ -82,6 +82,7 @@ final class MainWindowView: NSView {
         let signals: [AnyPublisher<Void, Never>] = [
             preferences.$tileVerticalPadding.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowCornerRadius.map { _ in () }.eraseToAnyPublisher(),
+            preferences.$windowClipShape.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowTintColor.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowTintOpacity.map { _ in () }.eraseToAnyPublisher(),
             preferences.$windowBackgroundImagePath.map { _ in () }.eraseToAnyPublisher(),
@@ -96,7 +97,10 @@ final class MainWindowView: NSView {
     }
 
     private var effectiveCornerRadius: CGFloat {
-        min(preferences.windowCornerRadius, maximumCornerRadius)
+        preferences.windowClipShape.resolvedCornerRadius(
+            base: preferences.windowCornerRadius,
+            maximum: maximumCornerRadius
+        )
     }
 
     private var maximumCornerRadius: CGFloat {

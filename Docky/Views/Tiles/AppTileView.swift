@@ -8,6 +8,8 @@ import SwiftUI
 
 struct AppTileView: View {
     let tile: AppTile
+    let clipShape: DockClipShape
+    let transparencyCompensationInset: CGFloat
     @ObservedObject private var workspace = WorkspaceService.shared
 
     private var isRunning: Bool {
@@ -19,15 +21,36 @@ struct AppTileView: View {
     }
 
     var body: some View {
-        iconView
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { proxy in
+            iconView(in: proxy.size)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var iconView: some View {
-        Image(nsImage: icon)
+    @ViewBuilder
+    private func iconView(in size: CGSize) -> some View {
+        if clipShape == .circle {
+            ZStack {
+                baseIconView(in: size)
+                    .clipShape(Circle())
+            }
+            .glassEffect()
+            .padding(transparencyCompensationInset)
+        } else {
+            baseIconView(in: size)
+        }
+    }
+
+    private func baseIconView(in size: CGSize) -> some View {
+        let inset = clipShape == .circle ? transparencyCompensationInset + 2 : 0
+
+        return Image(nsImage: icon)
             .resizable()
             .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
+            .aspectRatio(contentMode: clipShape == .circle ? .fill : .fit)
+            .frame(width: size.width + inset / 2, height: size.height + inset / 2)
+            .frame(width: size.width - inset * 2, height: size.height - inset * 2)
             .opacity(isHidden ? 0.5 : 1)
     }
 

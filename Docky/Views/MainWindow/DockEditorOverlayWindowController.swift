@@ -132,7 +132,10 @@ private struct DockEditorOverlayView: View {
         ZStack {
             GeometryReader { proxy in
                 let cutoutFrame = state.dockFrame
-                let cornerRadius = min(preferences.windowCornerRadius, min(cutoutFrame.width, cutoutFrame.height) / 2)
+                let cornerRadius = preferences.windowClipShape.resolvedCornerRadius(
+                    base: preferences.windowCornerRadius,
+                    maximum: min(cutoutFrame.width, cutoutFrame.height) / 2
+                )
 
                 OverlayCutoutShape(cutoutFrame: cutoutFrame, cornerRadius: cornerRadius)
                     .fill(.ultraThinMaterial, style: FillStyle(eoFill: true))

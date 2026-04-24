@@ -78,7 +78,7 @@ struct AppFolderTileView: View {
     private func iconGrid(in size: CGSize) -> some View {
         let displayedApps = Array(tile.apps.prefix(4))
         let side = min(size.width, size.height) * 0.36
-        let gap = min(size.width, size.height) * 0.06
+        let gap = min(size.width, size.height) * (preferences.tileClipShape == .circle ? 0 : 0.06)
 
         return ZStack {
             Color.clear
@@ -97,10 +97,10 @@ struct AppFolderTileView: View {
                             let index = row * 2 + column
                             Group {
                                 if index < displayedApps.count {
-                                    Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: displayedApps[index].bundleIdentifier))
-                                        .resizable()
-                                        .interpolation(.high)
-                                        .aspectRatio(contentMode: .fit)
+                                    gridIcon(
+                                        forBundleIdentifier: displayedApps[index].bundleIdentifier,
+                                        side: side
+                                    )
                                 } else {
                                     RoundedRectangle(cornerRadius: min(cornerRadius, 8), style: .continuous)
                                         .fill(.primary.opacity(0.06))
@@ -113,6 +113,28 @@ struct AppFolderTileView: View {
             }
             .padding(size.width * 0.12)
         }
+    }
+
+    @ViewBuilder
+    private func gridIcon(forBundleIdentifier bundleIdentifier: String, side: CGFloat) -> some View {
+        if preferences.tileClipShape == .circle {
+            baseGridIcon(forBundleIdentifier: bundleIdentifier, side: side)
+                .glassEffect(.regular, in: .circle)
+                .clipShape(.circle)
+        } else {
+            baseGridIcon(forBundleIdentifier: bundleIdentifier, side: side)
+        }
+    }
+
+    private func baseGridIcon(forBundleIdentifier bundleIdentifier: String, side: CGFloat) -> some View {
+        let inset = preferences.tileClipShape == .circle ? floor(side * 3 / 32) : 0
+
+        return Image(nsImage: IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier))
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: side + inset * 2, height: side + inset * 2)
+            .frame(width: side - inset * 2, height: side - inset * 2)
     }
 }
 
