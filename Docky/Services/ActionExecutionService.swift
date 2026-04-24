@@ -120,7 +120,7 @@ final class ActionExecutionService {
             switch permission {
             case .accessibility:
                 PermissionsService.shared.requestAccessibilityPermission(prompt: true)
-            case .finderAutomation, .userFolders, .screenCapture, .location:
+            case .finderAutomation, .userFolders, .screenCapture, .location, .systemEventsAutomation:
                 break
             }
 

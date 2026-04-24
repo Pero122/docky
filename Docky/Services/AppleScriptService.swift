@@ -19,6 +19,11 @@ final class AppleScriptService {
         await runFinderScript(.permissionProbe)
     }
 
+    @discardableResult
+    func requestSystemEventsAutomationPermission() async -> Bool {
+        await runSystemEventsPermissionProbe()
+    }
+
     func executeDescriptor(source: String) throws -> NSAppleEventDescriptor? {
         guard let script = NSAppleScript(source: source) else {
             throw AppleScriptServiceError.compilationFailed
@@ -73,7 +78,7 @@ final class AppleScriptService {
         )
         switch await runCatalogScript(
             source: script,
-            permissionRequirements: [.accessibility],
+            permissionRequirements: [.accessibility, .systemEventsAutomation],
             actionTitle: actionTitle,
             targetApp: targetApp
         ) {
@@ -118,6 +123,20 @@ final class AppleScriptService {
         }
     }
 
+    private func runSystemEventsPermissionProbe() async -> Bool {
+        do {
+            try execute(source: SystemEventsCommand.permissionProbe.source)
+            PermissionsService.shared.updateSystemEventsAutomation(status: .granted)
+            return true
+        } catch let error as AppleScriptServiceError {
+            handleSystemEventsPermissionProbe(error)
+            return false
+        } catch {
+            handleSystemEventsPermissionProbe(.executionFailed(error.localizedDescription))
+            return false
+        }
+    }
+
     private func execute(source: String) throws {
         _ = try executeDescriptor(source: source)
     }
@@ -130,6 +149,9 @@ final class AppleScriptService {
         if number == -1743 {
             return .permissionDenied
         }
+        if number == 1002 {
+            return .accessibilityDenied
+        }
         return .executionFailed(message)
     }
 
@@ -139,8 +161,10 @@ final class AppleScriptService {
             PermissionsService.shared.updateFinderAutomation(status: .denied)
             presentAlert(
                 title: "Finder automation wasn’t allowed",
-                body: "Allow Docky to control Finder in Privacy & Security > Automation, or use the Finder Automation row in Docky Settings to request access again."
+                body: "Allow Docky to control Finder in Privacy & Security > Automation, or use the Automation (Finder) row in Docky Settings to request access again."
             )
+        case .accessibilityDenied:
+            PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "Finder action")
         case .compilationFailed:
             presentAlert(
                 title: "Finder action failed",
@@ -166,6 +190,8 @@ final class AppleScriptService {
                 switch permission {
                 case .finderAutomation:
                     PermissionsService.shared.updateFinderAutomation(status: .denied)
+                case .systemEventsAutomation:
+                    PermissionsService.shared.updateSystemEventsAutomation(status: .denied)
                 case .accessibility:
                     PermissionsService.shared.refresh()
                 case .userFolders, .screenCapture, .location:
@@ -174,14 +200,16 @@ final class AppleScriptService {
             }
 
             if permissionRequirements.contains(.finderAutomation) {
-                presentAlert(
-                    title: "Automation wasn’t allowed",
-                    body: "Allow Docky to control \(targetApp ?? "the target app") in Privacy & Security > Automation, then try \(actionTitle.lowercased()) again."
+                presentAutomationAlert(
+                    targetApp: targetApp ?? "the target app",
+                    actionTitle: actionTitle,
+                    includesSystemEvents: false
                 )
-            } else if permissionRequirements.contains(.accessibility) {
-                presentAlert(
-                    title: "Accessibility access is required",
-                    body: "Allow Docky in Privacy & Security > Accessibility so it can perform \(actionTitle.lowercased())."
+            } else if let targetApp {
+                presentAutomationAlert(
+                    targetApp: targetApp,
+                    actionTitle: actionTitle,
+                    includesSystemEvents: permissionRequirements.contains(.accessibility)
                 )
             } else {
                 presentAlert(
@@ -189,6 +217,8 @@ final class AppleScriptService {
                     body: "macOS blocked \(actionTitle.lowercased())."
                 )
             }
+        case .accessibilityDenied:
+            PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: actionTitle)
         case .compilationFailed:
             presentAlert(
                 title: "Script action failed",
@@ -206,6 +236,8 @@ final class AppleScriptService {
         switch permission {
         case .finderAutomation:
             PermissionsService.shared.updateFinderAutomation(status: .granted)
+        case .systemEventsAutomation:
+            PermissionsService.shared.updateSystemEventsAutomation(status: .granted)
         case .accessibility:
             PermissionsService.shared.refresh()
         case .userFolders, .screenCapture, .location:
@@ -219,6 +251,69 @@ final class AppleScriptService {
         alert.informativeText = body
         alert.alertStyle = .warning
         alert.runModal()
+    }
+
+    private func presentAutomationAlert(
+        targetApp: String,
+        actionTitle: String,
+        includesSystemEvents: Bool
+    ) {
+        let alert = NSAlert()
+        alert.messageText = "Automation wasn’t allowed"
+        let appName = displayName(for: targetApp)
+        if includesSystemEvents {
+            alert.informativeText = "Allow Docky to control System Events and \(appName) in Privacy & Security > Automation, then try \(actionTitle.lowercased()) again."
+        } else {
+            alert.informativeText = "Allow Docky to control \(appName) in Privacy & Security > Automation, then try \(actionTitle.lowercased()) again."
+        }
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            PermissionsService.shared.openSystemSettings(for: .finderAutomation)
+        }
+    }
+
+    private func handleSystemEventsPermissionProbe(_ error: AppleScriptServiceError) {
+        switch error {
+        case .permissionDenied:
+            PermissionsService.shared.updateSystemEventsAutomation(status: .denied)
+            presentAlert(
+                title: "System Events automation wasn’t allowed",
+                body: "Allow Docky to control System Events in Privacy & Security > Automation, or use the Automation (System Events) row in Docky Settings to request access again."
+            )
+        case .accessibilityDenied:
+            PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "Request System Events Access")
+        case .compilationFailed:
+            presentAlert(
+                title: "System Events action failed",
+                body: "Docky couldn't prepare the AppleScript needed to request System Events automation."
+            )
+        case .executionFailed(let message):
+            presentAlert(
+                title: "System Events action failed",
+                body: message
+            )
+        }
+    }
+
+    private func displayName(for bundleIdentifier: String) -> String {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            return bundleIdentifier
+        }
+
+        if let bundle = Bundle(url: appURL) {
+            if let displayName = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String,
+               !displayName.isEmpty {
+                return displayName
+            }
+            if let name = bundle.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String,
+               !name.isEmpty {
+                return name
+            }
+        }
+
+        return appURL.deletingPathExtension().lastPathComponent
     }
 }
 
@@ -276,8 +371,20 @@ private enum FinderCommand {
 
 enum AppleScriptServiceError: Error {
     case permissionDenied
+    case accessibilityDenied
     case compilationFailed
     case executionFailed(String)
+}
+
+private enum SystemEventsCommand {
+    case permissionProbe
+
+    var source: String {
+        switch self {
+        case .permissionProbe:
+            return "tell application id \"com.apple.systemevents\" to keystroke \"\""
+        }
+    }
 }
 
 private func escapedPOSIXPath(_ url: URL) -> String {

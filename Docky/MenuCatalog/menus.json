@@ -4,6 +4,14 @@
     {
       "tileType": "app",
       "items": [
+        { "type": "action", "action": "ghostty.new-window" },
+        { "type": "action", "action": "ghostty.new-tab" },
+        { "type": "action", "action": "arc.new-window" },
+        { "type": "action", "action": "arc.new-incognito-window" },
+        { "type": "action", "action": "arc.new-tab" },
+        { "type": "action", "action": "dia.new-window" },
+        { "type": "action", "action": "dia.new-tab" },
+        { "type": "action", "action": "claude.new-conversation" },
         { "type": "action", "action": "xcode.clean-build-folder" },
         { "type": "divider" },
         {

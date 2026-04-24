@@ -184,6 +184,143 @@
           "when": { "bundleIdentifierEquals": "com.apple.dt.Xcode" }
         }
       ]
+    },
+    {
+      "id": "docky.curated-app-integrations",
+      "title": "Curated App Integrations",
+      "author": "Docky",
+      "version": "1.0.0",
+      "reviewStatus": "curated",
+      "description": "Docky-reviewed actions for selected third-party apps and browsers.",
+      "actions": [
+        {
+          "id": "ghostty.new-window",
+          "title": "New Window",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "com.mitchellh.ghostty",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"com.mitchellh.ghostty\"\n    new window\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": { "bundleIdentifierEquals": "com.mitchellh.ghostty" }
+        },
+        {
+          "id": "ghostty.new-tab",
+          "title": "New Tab",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "com.mitchellh.ghostty",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"com.mitchellh.ghostty\"\n    tell front window to new tab\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": {
+            "all": [
+              { "bundleIdentifierEquals": "com.mitchellh.ghostty" },
+              { "flag": "isRunning" }
+            ]
+          }
+        },
+        {
+          "id": "arc.new-window",
+          "title": "New Window",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "company.thebrowser.Browser",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"company.thebrowser.Browser\"\n    make new window\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": { "bundleIdentifierEquals": "company.thebrowser.Browser" }
+        },
+        {
+          "id": "arc.new-incognito-window",
+          "title": "New Incognito Window",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "company.thebrowser.Browser",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"company.thebrowser.Browser\"\n    make new window with properties {mode:\"incognito\"}\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": { "bundleIdentifierEquals": "company.thebrowser.Browser" }
+        },
+        {
+          "id": "arc.new-tab",
+          "title": "New Tab",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "company.thebrowser.Browser",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"company.thebrowser.Browser\"\n    tell front window to make new tab\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": {
+            "all": [
+              { "bundleIdentifierEquals": "company.thebrowser.Browser" },
+              { "flag": "isRunning" }
+            ]
+          }
+        },
+        {
+          "id": "dia.new-window",
+          "title": "New Window",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "company.thebrowser.dia",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"company.thebrowser.dia\"\n    make new window\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": { "bundleIdentifierEquals": "company.thebrowser.dia" }
+        },
+        {
+          "id": "dia.new-tab",
+          "title": "New Tab",
+          "kind": "applescript",
+          "tileTypes": ["app"],
+          "targetApp": "company.thebrowser.dia",
+          "permissions": [],
+          "inputs": [],
+          "script": "tell application id \"company.thebrowser.dia\"\n    tell front window to make new tab\nend tell",
+          "destructive": false,
+          "requiresFrontmost": false,
+          "holdOption": false,
+          "when": {
+            "all": [
+              { "bundleIdentifierEquals": "company.thebrowser.dia" },
+              { "flag": "isRunning" }
+            ]
+          }
+        },
+        {
+          "id": "claude.new-conversation",
+          "title": "New Conversation",
+          "kind": "menuClick",
+          "tileTypes": ["app"],
+          "targetApp": "com.anthropic.claudefordesktop",
+          "permissions": ["accessibility"],
+          "inputs": [],
+          "path": ["File", "New Conversation"],
+          "destructive": false,
+          "requiresFrontmost": true,
+          "holdOption": false,
+          "when": { "bundleIdentifierEquals": "com.anthropic.claudefordesktop" }
+        }
+      ]
     }
   ]
 }

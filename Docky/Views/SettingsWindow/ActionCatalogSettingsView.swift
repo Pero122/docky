@@ -40,7 +40,7 @@ struct ActionCatalogSettingsView: View {
             }
 
             Section("Scripted Actions") {
-                Text("Docky loads menu definitions from bundled JSON and executes only reviewed action kinds: builtin, applescript, and menuClick. The catalog format is designed so future curated packages can add actions and append menu items at approved insertion points without replacing Docky’s core menus.")
+                Text("Docky loads menu definitions from bundled JSON and executes only reviewed action kinds: builtin, applescript, and menuClick. App-targeted AppleScript and menuClick actions may trigger macOS Automation prompts the first time you use them. The catalog format is designed so future curated packages can add actions and append menu items at approved insertion points without replacing Docky’s core menus.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 

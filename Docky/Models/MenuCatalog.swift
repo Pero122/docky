@@ -21,11 +21,13 @@ enum CatalogActionKind: String, Codable {
 enum CatalogPermissionRequirement: String, Codable, CaseIterable {
     case finderAutomation
     case accessibility
+    case systemEventsAutomation
 
     var permission: Permission {
         switch self {
         case .finderAutomation: return .finderAutomation
         case .accessibility: return .accessibility
+        case .systemEventsAutomation: return .systemEventsAutomation
         }
     }
 }

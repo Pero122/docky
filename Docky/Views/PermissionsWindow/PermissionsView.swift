@@ -31,6 +31,12 @@ struct PermissionsView: View {
                 _ = await service.requestPermission(for: step)
             }
 
+            if step == .systemEventsAutomation,
+               status == .notDetermined,
+               service.status(for: .accessibility) == .granted {
+                _ = await service.requestPermission(for: step)
+            }
+
             await pollUntilAdvance()
         }
     }
@@ -130,14 +136,14 @@ struct PermissionsView: View {
             }
             .buttonStyle(.borderedProminent)
 
-            if step == .finderAutomation || step == .screenCapture || step == .location {
+            if step == .finderAutomation || step == .systemEventsAutomation || step == .screenCapture || step == .location {
                 requestButton
             }
         }
     }
 
     private var showsAppDragProxy: Bool {
-        true
+        step != .finderAutomation && step != .systemEventsAutomation && step != .location
     }
 
     private var draggableAppProxy: some View {
@@ -207,7 +213,7 @@ struct PermissionsView: View {
 
     @ViewBuilder
     private var requestButton: some View {
-        if step == .finderAutomation || step == .screenCapture || step == .location {
+        if step == .finderAutomation || step == .systemEventsAutomation || step == .screenCapture || step == .location {
             Button(requestButtonTitle) {
                 Task {
                     _ = await service.requestPermission(for: step)
@@ -225,6 +231,8 @@ struct PermissionsView: View {
             return service.finderAutomationGrantMethod
         case .accessibility:
             return service.accessibilityGrantMethod
+        case .systemEventsAutomation:
+            return service.systemEventsAutomationGrantMethod
         case .screenCapture:
             return service.screenCaptureGrantMethod
         case .location:
@@ -235,6 +243,8 @@ struct PermissionsView: View {
     private var systemSettingsButtonTitle: String {
         switch step {
         case .finderAutomation:
+            return "Open System Settings (Automation)"
+        case .systemEventsAutomation:
             return "Open System Settings (Automation)"
         case .userFolders:
             return "Open System Settings (Full Disk Access)"
@@ -251,6 +261,8 @@ struct PermissionsView: View {
         switch step {
         case .finderAutomation:
             return "Request Finder Access"
+        case .systemEventsAutomation:
+            return "Request System Events Access"
         case .screenCapture:
             return "Request Screen Recording Access"
         case .location:
@@ -320,6 +332,8 @@ struct PermissionsView: View {
             return [Color(red: 0.27, green: 0.68, blue: 0.98), Color(red: 0.12, green: 0.31, blue: 0.68)]
         case .accessibility:
             return [Color(red: 0.66, green: 0.39, blue: 0.98), Color(red: 0.24, green: 0.14, blue: 0.56)]
+        case .systemEventsAutomation:
+            return [Color(red: 0.98, green: 0.69, blue: 0.24), Color(red: 0.58, green: 0.34, blue: 0.08)]
         case .screenCapture:
             return [Color(red: 0.10, green: 0.70, blue: 0.63), Color(red: 0.07, green: 0.28, blue: 0.45)]
         case .location:
@@ -332,9 +346,11 @@ struct PermissionsView: View {
         case .userFolders:
             return "folder.badge.gearshape"
         case .finderAutomation:
-            return "apple.terminal.on.rectangle"
+            return "folder.badge.gearshape"
         case .accessibility:
             return "figure.wave.circle"
+        case .systemEventsAutomation:
+            return "keyboard"
         case .screenCapture:
             return "rectangle.on.rectangle"
         case .location:
@@ -354,6 +370,14 @@ struct PermissionsView: View {
     }
 
     private var bottomSummary: String {
+        if step == .finderAutomation {
+            return "Finder access can be requested here now, so reveal-in-Finder and Trash actions work without waiting for the first macOS prompt."
+        }
+
+        if step == .systemEventsAutomation {
+            return "System Events access can be requested here now for curated menu-click actions. Accessibility should be enabled too, since UI scripting depends on both permissions."
+        }
+
         if step.isRequiredAtLaunch {
             return "This permission unlocks a core Docky feature, but you can skip it for now and grant it later."
         }

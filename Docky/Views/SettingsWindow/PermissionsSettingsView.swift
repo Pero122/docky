@@ -106,6 +106,8 @@ struct PermissionsSettingsView: View {
             return service.userFoldersGrantMethod
         case .finderAutomation:
             return service.finderAutomationGrantMethod
+        case .systemEventsAutomation:
+            return service.systemEventsAutomationGrantMethod
         case .accessibility:
             return service.accessibilityGrantMethod
         case .screenCapture:
@@ -119,6 +121,7 @@ struct PermissionsSettingsView: View {
         switch permission {
         case .userFolders: return "Open System Settings"
         case .finderAutomation: return "Request Finder Access"
+        case .systemEventsAutomation: return "Request System Events Access"
         case .accessibility: return "Request Accessibility Access"
         case .screenCapture: return "Request Screen Recording Access"
         case .location: return "Request Location Access"

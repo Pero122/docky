@@ -4,8 +4,9 @@
 //
 //  Tracks the remaining macOS permissions Docky needs:
 //    - .userFolders       → Full Disk Access for pinned folder previews
-//    - .finderAutomation  → Finder Apple Events for Finder-backed actions
-//    - .accessibility     → inspect and restore minimized windows
+//    - .finderAutomation       → Finder Apple Events for Finder-backed actions
+//    - .accessibility          → inspect and restore minimized windows
+//    - .systemEventsAutomation → System Events Apple Events for menu-click actions
 //    - .screenCapture     → minimized window previews
 //
 //  Required file-system access is granted through Full Disk Access (FDA),
@@ -36,6 +37,7 @@ enum Permission: String, CaseIterable, Identifiable {
     case userFolders
     case finderAutomation
     case accessibility
+    case systemEventsAutomation
     case screenCapture
     case location
 
@@ -44,8 +46,9 @@ enum Permission: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .userFolders: return "Full Disk Access"
-        case .finderAutomation: return "Finder Automation"
+        case .finderAutomation: return "Automation (Finder)"
         case .accessibility: return "Accessibility"
+        case .systemEventsAutomation: return "Automation (System Events)"
         case .screenCapture: return "Screen Recording"
         case .location: return "Location"
         }
@@ -56,9 +59,11 @@ enum Permission: String, CaseIterable, Identifiable {
         case .userFolders:
             return "Grant Full Disk Access so Docky can preview recent items from folders pinned to the Dock, including protected locations like Downloads, Documents, and Desktop. No data leaves your Mac."
         case .finderAutomation:
-            return "Docky can ask Finder to reveal files, open folders in Finder, open the Trash, and empty the Trash. macOS controls this separately from file access, and you can grant or revoke it at any time in Privacy & Security."
+            return "Docky uses Finder automation for reveal-in-Finder, open-folder, and Trash actions. macOS grants this separately from Full Disk Access, and you can request it here without waiting for the first Finder action to fail."
         case .accessibility:
             return "Accessibility access lets Docky click menu bar items for curated menuClick actions, inspect app windows for Dock-like reopen behavior and window menus, and restore minimized windows beside the Trash. These actions are slower and more fragile than built-in actions, so Docky requests this only when needed."
+        case .systemEventsAutomation:
+            return "Docky uses System Events automation for curated menuClick actions. Requesting it here lets Docky click supported app menus without waiting for the first action to trigger a macOS prompt. Menu-click actions still require Accessibility too."
         case .screenCapture:
             return "Grant Screen Recording so Docky can show thumbnail previews for minimized windows. Docky only captures the minimized window itself for its dock tile, and nothing leaves your Mac. macOS may require quitting and reopening Docky after you allow this."
         case .location:
@@ -71,6 +76,8 @@ enum Permission: String, CaseIterable, Identifiable {
         case .userFolders:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
         case .finderAutomation:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+        case .systemEventsAutomation:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
         case .accessibility:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
@@ -86,6 +93,8 @@ enum Permission: String, CaseIterable, Identifiable {
         case .userFolders:
             return true
         case .finderAutomation:
+            return false
+        case .systemEventsAutomation:
             return false
         case .accessibility:
             return true
@@ -109,6 +118,9 @@ final class PermissionsService: ObservableObject {
     @Published private(set) var accessibility: PermissionStatus = .notDetermined
     @Published private(set) var accessibilityGrantMethod: GrantMethod?
 
+    @Published private(set) var systemEventsAutomation: PermissionStatus = .notDetermined
+    @Published private(set) var systemEventsAutomationGrantMethod: GrantMethod?
+
     @Published private(set) var screenCapture: PermissionStatus = .notDetermined
     @Published private(set) var screenCaptureGrantMethod: GrantMethod?
 
@@ -118,6 +130,7 @@ final class PermissionsService: ObservableObject {
     private let dockBookmarkKey = "docky.dockPlistBookmark"
     private let userFoldersBookmarkKey = "docky.userFoldersBookmark"
     private let finderAutomationStatusKey = "docky.finderAutomationStatus"
+    private let systemEventsAutomationStatusKey = "docky.systemEventsAutomationStatus"
     private let initialOnboardingCompletedKey = "docky.initialOnboardingCompleted"
 
     private init() {
@@ -132,6 +145,7 @@ final class PermissionsService: ObservableObject {
         case .userFolders: return userFolders
         case .finderAutomation: return finderAutomation
         case .accessibility: return accessibility
+        case .systemEventsAutomation: return systemEventsAutomation
         case .screenCapture: return screenCapture
         case .location: return location
         }
@@ -174,6 +188,7 @@ final class PermissionsService: ObservableObject {
         refreshUserFolders(fdaGranted: fdaGranted)
         refreshFinderAutomation()
         refreshAccessibility()
+        refreshSystemEventsAutomation()
         refreshScreenCapture()
         refreshLocation()
     }
@@ -195,6 +210,14 @@ final class PermissionsService: ObservableObject {
             return await AppleScriptService.shared.requestFinderAutomationPermission()
         case .accessibility:
             return requestAccessibilityPermission(prompt: true)
+        case .systemEventsAutomation:
+            if status(for: .accessibility) != .granted {
+                requestAccessibilityPermission(prompt: true)
+                guard status(for: .accessibility) == .granted else {
+                    return false
+                }
+            }
+            return await AppleScriptService.shared.requestSystemEventsAutomationPermission()
         case .screenCapture:
             return requestScreenCapturePermission()
         case .location:
@@ -205,9 +228,16 @@ final class PermissionsService: ObservableObject {
     }
 
     func clearAutomationStatus(for permission: Permission) {
-        guard permission == .finderAutomation else { return }
-        UserDefaults.standard.removeObject(forKey: finderAutomationStatusKey)
-        refreshFinderAutomation()
+        switch permission {
+        case .finderAutomation:
+            UserDefaults.standard.removeObject(forKey: finderAutomationStatusKey)
+            refreshFinderAutomation()
+        case .systemEventsAutomation:
+            UserDefaults.standard.removeObject(forKey: systemEventsAutomationStatusKey)
+            refreshSystemEventsAutomation()
+        case .userFolders, .accessibility, .screenCapture, .location:
+            break
+        }
     }
 
     @discardableResult
@@ -276,6 +306,35 @@ final class PermissionsService: ObservableObject {
         default:
             finderAutomation = .notDetermined
             finderAutomationGrantMethod = nil
+        }
+    }
+
+    func updateSystemEventsAutomation(status: PermissionStatus) {
+        switch status {
+        case .granted:
+            UserDefaults.standard.set("granted", forKey: systemEventsAutomationStatusKey)
+            systemEventsAutomationGrantMethod = .automation
+        case .denied:
+            UserDefaults.standard.set("denied", forKey: systemEventsAutomationStatusKey)
+            systemEventsAutomationGrantMethod = nil
+        case .notDetermined:
+            UserDefaults.standard.removeObject(forKey: systemEventsAutomationStatusKey)
+            systemEventsAutomationGrantMethod = nil
+        }
+        systemEventsAutomation = status
+    }
+
+    private func refreshSystemEventsAutomation() {
+        switch UserDefaults.standard.string(forKey: systemEventsAutomationStatusKey) {
+        case "granted":
+            systemEventsAutomation = .granted
+            systemEventsAutomationGrantMethod = .automation
+        case "denied":
+            systemEventsAutomation = .denied
+            systemEventsAutomationGrantMethod = nil
+        default:
+            systemEventsAutomation = .notDetermined
+            systemEventsAutomationGrantMethod = nil
         }
     }
 

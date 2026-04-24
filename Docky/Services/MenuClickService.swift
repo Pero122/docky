@@ -39,6 +39,15 @@ final class MenuClickService {
             return false
         }
 
+        if PermissionsService.shared.status(for: .systemEventsAutomation) != .granted {
+            _ = await PermissionsService.shared.requestPermission(for: .systemEventsAutomation)
+        }
+
+        guard PermissionsService.shared.status(for: .systemEventsAutomation) == .granted else {
+            PermissionsService.shared.presentPermissionAlert(for: .systemEventsAutomation, actionTitle: action.title)
+            return false
+        }
+
         return await AppleScriptService.shared.runMenuClickScript(
             targetApp: targetApp,
             processName: processName,
