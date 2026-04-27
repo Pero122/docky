@@ -86,13 +86,14 @@ struct SystemStatusWidgetTileView: View {
                     .foregroundStyle(Color.primary.opacity(0.98))
                     .lineLimit(1)
 
-                Text(metric.secondaryText)
-                    .font(.system(size: layout.captionFontSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.68))
-                    .lineLimit(1)
+//                Text(metric.secondaryText)
+//                    .font(.system(size: layout.captionFontSize, weight: .semibold))
+//                    .foregroundStyle(Color.primary.opacity(0.68))
+//                    .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .offset(y: 2)
     }
 
     private func emptyState(layout: LayoutMetrics) -> some View {

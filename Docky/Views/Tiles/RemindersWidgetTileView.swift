@@ -119,13 +119,6 @@ struct RemindersWidgetTileView: View {
                     .font(.system(size: layout.detailFontSize, weight: .medium))
                     .foregroundStyle(Color.primary.opacity(0.82))
                     .lineLimit(1)
-
-                if !item.listTitle.isEmpty {
-                    Text(item.listTitle)
-                        .font(.system(size: layout.detailFontSize))
-                        .foregroundStyle(Color.primary.opacity(0.64))
-                        .lineLimit(1)
-                }
             }
 
             Spacer(minLength: 0)
@@ -251,17 +244,22 @@ struct RemindersWidgetTileView: View {
             return "No due date"
         }
 
+        var list = ""
+        if !item.listTitle.isEmpty {
+            list = " in \(item.listTitle)"
+        }
+
         switch item.timingCategory(relativeTo: now) {
         case .overdue:
             return item.hasDueTime && Calendar.autoupdatingCurrent.isDate(dueDate, inSameDayAs: now)
-                ? "Overdue • \(timeFormatter.string(from: dueDate))"
-                : "Overdue • \(dayLabel(for: item, dueDate: dueDate, now: now))"
+                ? "Overdue • \(timeFormatter.string(from: dueDate))\(list)"
+                : "Overdue • \(dayLabel(for: item, dueDate: dueDate, now: now))\(list)"
         case .today:
-            return item.hasDueTime ? timeFormatter.string(from: dueDate) : "Today"
+            return item.hasDueTime ? timeFormatter.string(from: dueDate) : "Today\(list)"
         case .upcoming:
-            return dayLabel(for: item, dueDate: dueDate, now: now)
+            return dayLabel(for: item, dueDate: dueDate, now: now) + list
         case .unscheduled:
-            return "No due date"
+            return "No due date\(list)"
         }
     }
 
