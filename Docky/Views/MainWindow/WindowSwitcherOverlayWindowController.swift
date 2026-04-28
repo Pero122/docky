@@ -128,7 +128,7 @@ private struct WindowSwitcherOverlayView: View {
                         .padding(.horizontal, 28)
                         .padding(.vertical, 28)
                     }
-                    .frame(maxWidth: proxy.size.width - 80)
+                    .frame(maxWidth: max(0, proxy.size.width - 80))
                     .fixedSize(horizontal: true, vertical: true)
                     .glassEffect(.regular, in: .rect(cornerRadius: containerCornerRadius, style: .continuous))
                     .onChange(of: switcher.selectedWindowIdentifier) { _, selection in
