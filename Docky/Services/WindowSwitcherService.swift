@@ -59,6 +59,11 @@ final class WindowSwitcherService: ObservableObject {
     }
 
     func handleHotKeyPress(direction: Int) {
+        guard DockyPreferences.shared.enablesWindowSwitcher else {
+            dismiss()
+            return
+        }
+
         guard PermissionsService.shared.accessibility == .granted else {
             PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "switch between windows")
             return
@@ -191,6 +196,18 @@ final class WindowSwitcherService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] shortcut in
                 self?.registerHotKey(shortcut: shortcut)
+            }
+            .store(in: &cancellables)
+
+        DockyPreferences.shared.$enablesWindowSwitcher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+
+                self.registerHotKey(shortcut: DockyPreferences.shared.windowSwitcherShortcut)
+                if !isEnabled {
+                    self.dismiss()
+                }
             }
             .store(in: &cancellables)
 
@@ -407,7 +424,7 @@ final class WindowSwitcherService: ObservableObject {
     private func registerHotKey(shortcut: KeyboardShortcut) {
         unregisterHotKey()
 
-        guard shortcut.isValid else {
+        guard DockyPreferences.shared.enablesWindowSwitcher, shortcut.isValid else {
             return
         }
 

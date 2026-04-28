@@ -36,6 +36,18 @@ final class LaunchpadHotKeyService {
                 self?.registerHotKey(shortcut: shortcut)
             }
             .store(in: &cancellables)
+
+        DockyPreferences.shared.$enablesLaunchpadOverlay
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+
+                self.registerHotKey(shortcut: DockyPreferences.shared.launchpadShortcut)
+                if !isEnabled {
+                    LaunchpadOverlayService.shared.dismiss()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func installHotKeyHandlerIfNeeded() {
@@ -82,7 +94,7 @@ final class LaunchpadHotKeyService {
     private func registerHotKey(shortcut: KeyboardShortcut) {
         unregisterHotKey()
 
-        guard shortcut.isValid else {
+        guard DockyPreferences.shared.enablesLaunchpadOverlay, shortcut.isValid else {
             return
         }
 

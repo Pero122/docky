@@ -76,12 +76,18 @@ struct TileView: View {
         case .appFolder(let folder):
             return appFolderContextActions(for: folder)
         case .launchpad:
-            var actions = [ContextAction.action("Open Launchpad") {
-                LaunchpadOverlayService.shared.present()
-            }]
+            var actions: [ContextAction] = []
+
+            if preferences.enablesLaunchpadOverlay {
+                actions.append(.action("Open Launchpad") {
+                    LaunchpadOverlayService.shared.present()
+                })
+            }
 
             if !customDockyTileActions.isEmpty {
-                actions.append(.divider)
+                if !actions.isEmpty {
+                    actions.append(.divider)
+                }
                 actions.append(contentsOf: customDockyTileActions)
             }
 
@@ -751,6 +757,7 @@ struct TileView: View {
             isAppFolderPopoverPresented = true
         case .launchpad:
             isTooltipPresented = false
+            guard preferences.enablesLaunchpadOverlay else { return }
             LaunchpadOverlayService.shared.toggle()
         case .widget(let widget):
             isTooltipPresented = false

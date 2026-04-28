@@ -19,6 +19,11 @@ final class LaunchpadOverlayService: ObservableObject {
     }
 
     func present() {
+        guard DockyPreferences.shared.enablesLaunchpadOverlay else {
+            dismiss()
+            return
+        }
+
         apps = TileStore.shared.launchpadApps()
         isPresented = true
     }

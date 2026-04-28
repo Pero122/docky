@@ -696,6 +696,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Whether Docky's Launchpad overlay is enabled.
+    @Published var enablesLaunchpadOverlay: Bool {
+        didSet {
+            guard enablesLaunchpadOverlay != oldValue else { return }
+            defaults.set(enablesLaunchpadOverlay, forKey: Keys.enablesLaunchpadOverlay)
+        }
+    }
+
     /// Preferred column count for the Launchpad overlay grid.
     @Published var launchpadGridColumnCount: Int {
         didSet {
@@ -719,6 +727,14 @@ final class DockyPreferences: ObservableObject {
         didSet {
             guard launchpadShortcut != oldValue else { return }
             persistLaunchpadShortcut(launchpadShortcut)
+        }
+    }
+
+    /// Whether Docky's window switcher is enabled.
+    @Published var enablesWindowSwitcher: Bool {
+        didSet {
+            guard enablesWindowSwitcher != oldValue else { return }
+            defaults.set(enablesWindowSwitcher, forKey: Keys.enablesWindowSwitcher)
         }
     }
 
@@ -879,8 +895,10 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorColor = "docky.activeIndicatorColor"
         static let appIconOverrides = "docky.appIconOverrides"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
+        static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
         static let launchpadGridColumnCount = "docky.launchpadGridColumnCount"
         static let launchpadShortcut = "docky.launchpadShortcut"
+        static let enablesWindowSwitcher = "docky.enablesWindowSwitcher"
         static let windowSwitcherShortcut = "docky.windowSwitcherShortcut"
         static let showsWindowSwitcherFocusPreview = "docky.showsWindowSwitcherFocusPreview"
         static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
@@ -911,8 +929,10 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorColor: DockColor? = nil
         static let appIconOverrides: [AppIconOverride] = []
         static let showsGroupedOpenedAppsInDock = true
+        static let enablesLaunchpadOverlay = true
         static let launchpadGridColumnCount = 7
         static let launchpadShortcut = KeyboardShortcut.empty
+        static let enablesWindowSwitcher = true
         static let windowSwitcherShortcut = KeyboardShortcut(keyCode: 48, modifierFlags: [.option])
         static let showsWindowSwitcherFocusPreview = true
         static let pinnedAppBundleIdentifiers: [String] = []
@@ -944,8 +964,10 @@ final class DockyPreferences: ObservableObject {
         let storedActiveIndicatorColor = defaults.data(forKey: Keys.activeIndicatorColor)
         let storedAppIconOverrides = defaults.data(forKey: Keys.appIconOverrides)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
+        let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
         let storedLaunchpadGridColumnCount = defaults.object(forKey: Keys.launchpadGridColumnCount) as? Int
         let storedLaunchpadShortcut = defaults.data(forKey: Keys.launchpadShortcut)
+        let storedEnablesWindowSwitcher = defaults.object(forKey: Keys.enablesWindowSwitcher) as? Bool
         let storedWindowSwitcherShortcut = defaults.data(forKey: Keys.windowSwitcherShortcut)
         let storedShowsWindowSwitcherFocusPreview = defaults.object(forKey: Keys.showsWindowSwitcherFocusPreview) as? Bool
         let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
@@ -976,8 +998,10 @@ final class DockyPreferences: ObservableObject {
         self.activeIndicatorColor = Self.decodeColor(from: storedActiveIndicatorColor) ?? DefaultValues.activeIndicatorColor
         self.appIconOverrides = Self.decodeAppIconOverrides(from: storedAppIconOverrides) ?? DefaultValues.appIconOverrides
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
+        self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
         self.launchpadGridColumnCount = max(storedLaunchpadGridColumnCount ?? DefaultValues.launchpadGridColumnCount, 1)
         self.launchpadShortcut = Self.decodeKeyboardShortcut(from: storedLaunchpadShortcut) ?? DefaultValues.launchpadShortcut
+        self.enablesWindowSwitcher = storedEnablesWindowSwitcher ?? DefaultValues.enablesWindowSwitcher
         self.windowSwitcherShortcut = Self.decodeKeyboardShortcut(from: storedWindowSwitcherShortcut) ?? DefaultValues.windowSwitcherShortcut
         self.showsWindowSwitcherFocusPreview = storedShowsWindowSwitcherFocusPreview ?? DefaultValues.showsWindowSwitcherFocusPreview
         self.pinnedAppBundleIdentifiers = initialPinnedAppBundleIdentifiers
@@ -1008,8 +1032,10 @@ final class DockyPreferences: ObservableObject {
         activeIndicatorColor = DefaultValues.activeIndicatorColor
         appIconOverrides = DefaultValues.appIconOverrides
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
+        enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
         launchpadGridColumnCount = DefaultValues.launchpadGridColumnCount
         launchpadShortcut = DefaultValues.launchpadShortcut
+        enablesWindowSwitcher = DefaultValues.enablesWindowSwitcher
         windowSwitcherShortcut = DefaultValues.windowSwitcherShortcut
         showsWindowSwitcherFocusPreview = DefaultValues.showsWindowSwitcherFocusPreview
         appWidgetDisplays = DefaultValues.appWidgetDisplays

@@ -12,6 +12,16 @@ struct WindowManagementSettingsView: View {
     var body: some View {
         Form {
             Section("Window Switcher") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Enable Window Switcher", isOn: $preferences.enablesWindowSwitcher)
+                        .font(.headline)
+
+                    Text("Turn Docky's Cmd-Tab-style switcher on or off without clearing its shortcut or preview preference.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -32,6 +42,7 @@ struct WindowManagementSettingsView: View {
                         ) { shortcut in
                             preferences.windowSwitcherShortcut = shortcut
                         }
+                        .disabled(!preferences.enablesWindowSwitcher)
                     }
 
                     Text("While the switcher is open, keep the shortcut modifiers held and tap the shortcut again to cycle. Release the modifiers to focus the selected window.")
@@ -43,6 +54,7 @@ struct WindowManagementSettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Preview Selected Window In Place", isOn: $preferences.showsWindowSwitcherFocusPreview)
                         .font(.headline)
+                        .disabled(!preferences.enablesWindowSwitcher)
 
                     Text("After the current switcher selection stays put for a moment, darken the backdrop and draw that window at its on-screen position behind the switcher.")
                         .foregroundStyle(.secondary)

@@ -11,6 +11,18 @@ struct LaunchpadSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Availability") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Enable Launchpad", isOn: $preferences.enablesLaunchpadOverlay)
+                        .font(.headline)
+
+                    Text("Turn Docky's Launchpad overlay on or off without removing its shortcut or layout preferences.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+            }
+
             Section("Shortcut") {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 12) {
@@ -32,6 +44,7 @@ struct LaunchpadSettingsView: View {
                         ) { shortcut in
                             preferences.launchpadShortcut = shortcut
                         }
+                        .disabled(!preferences.enablesLaunchpadOverlay)
                     }
 
                     Text("Leave this unset if you only want to open Launchpad from the Docky tile or context menu.")
@@ -51,6 +64,7 @@ struct LaunchpadSettingsView: View {
 
                         Stepper("\(preferences.launchpadGridColumnCount)", value: $preferences.launchpadGridColumnCount, in: 1...10)
                             .foregroundStyle(.secondary)
+                            .disabled(!preferences.enablesLaunchpadOverlay)
                     }
 
                     Text("Controls the default Launchpad grid width. Docky uses this many columns when they fit on screen, starting at 7 by default.")
