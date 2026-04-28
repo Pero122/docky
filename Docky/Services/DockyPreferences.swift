@@ -714,6 +714,14 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Global shortcut that opens Docky's window switcher.
+    @Published var windowSwitcherShortcut: KeyboardShortcut {
+        didSet {
+            guard windowSwitcherShortcut != oldValue else { return }
+            persistWindowSwitcherShortcut(windowSwitcherShortcut)
+        }
+    }
+
     /// Docky-owned ordered pinned app bundle identifiers.
     @Published var pinnedAppBundleIdentifiers: [String] {
         didSet {
@@ -856,6 +864,7 @@ final class DockyPreferences: ObservableObject {
         static let appIconOverrides = "docky.appIconOverrides"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let launchpadGridColumnCount = "docky.launchpadGridColumnCount"
+        static let windowSwitcherShortcut = "docky.windowSwitcherShortcut"
         static let pinnedAppBundleIdentifiers = "docky.pinnedAppBundleIdentifiers"
         static let pinnedItems = "docky.pinnedItems"
         static let widgetPlacements = "docky.widgetPlacements"
@@ -885,6 +894,7 @@ final class DockyPreferences: ObservableObject {
         static let appIconOverrides: [AppIconOverride] = []
         static let showsGroupedOpenedAppsInDock = true
         static let launchpadGridColumnCount = 7
+        static let windowSwitcherShortcut = KeyboardShortcut(keyCode: 48, modifierFlags: [.option])
         static let pinnedAppBundleIdentifiers: [String] = []
         static let pinnedItems: [PinnedTileItem] = []
         static let widgetPlacements: [WidgetPlacement] = []
@@ -915,6 +925,7 @@ final class DockyPreferences: ObservableObject {
         let storedAppIconOverrides = defaults.data(forKey: Keys.appIconOverrides)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedLaunchpadGridColumnCount = defaults.object(forKey: Keys.launchpadGridColumnCount) as? Int
+        let storedWindowSwitcherShortcut = defaults.data(forKey: Keys.windowSwitcherShortcut)
         let storedPinnedAppBundleIdentifiers = defaults.stringArray(forKey: Keys.pinnedAppBundleIdentifiers)
         let storedPinnedItems = defaults.data(forKey: Keys.pinnedItems)
         let storedWidgetPlacements = defaults.data(forKey: Keys.widgetPlacements)
@@ -944,6 +955,7 @@ final class DockyPreferences: ObservableObject {
         self.appIconOverrides = Self.decodeAppIconOverrides(from: storedAppIconOverrides) ?? DefaultValues.appIconOverrides
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.launchpadGridColumnCount = max(storedLaunchpadGridColumnCount ?? DefaultValues.launchpadGridColumnCount, 1)
+        self.windowSwitcherShortcut = Self.decodeKeyboardShortcut(from: storedWindowSwitcherShortcut) ?? DefaultValues.windowSwitcherShortcut
         self.pinnedAppBundleIdentifiers = initialPinnedAppBundleIdentifiers
         self.pinnedItems = initialPinnedItems
         self.widgetPlacements = Self.decodeWidgetPlacements(from: storedWidgetPlacements) ?? DefaultValues.widgetPlacements
@@ -973,6 +985,7 @@ final class DockyPreferences: ObservableObject {
         appIconOverrides = DefaultValues.appIconOverrides
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         launchpadGridColumnCount = DefaultValues.launchpadGridColumnCount
+        windowSwitcherShortcut = DefaultValues.windowSwitcherShortcut
         appWidgetDisplays = DefaultValues.appWidgetDisplays
     }
 
@@ -1049,6 +1062,15 @@ final class DockyPreferences: ObservableObject {
         defaults.set(data, forKey: Keys.appIconOverrides)
     }
 
+    private func persistWindowSwitcherShortcut(_ shortcut: KeyboardShortcut) {
+        guard let data = try? encoder.encode(shortcut) else {
+            defaults.removeObject(forKey: Keys.windowSwitcherShortcut)
+            return
+        }
+
+        defaults.set(data, forKey: Keys.windowSwitcherShortcut)
+    }
+
     private static func decodeColor(from data: Data?) -> DockColor? {
         guard let data else {
             return nil
@@ -1079,6 +1101,14 @@ final class DockyPreferences: ObservableObject {
         }
 
         return try? JSONDecoder().decode([AppIconOverride].self, from: data)
+    }
+
+    private static func decodeKeyboardShortcut(from data: Data?) -> KeyboardShortcut? {
+        guard let data else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(KeyboardShortcut.self, from: data)
     }
 
     private static func decodePinnedItems(from data: Data?) -> [PinnedTileItem]? {

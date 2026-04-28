@@ -8,6 +8,7 @@ import SwiftUI
 private enum SettingsPane: String, CaseIterable, Identifiable {
     case appearance
     case behavior
+    case windowManagement
     case appIcons
     case permissions
     case actions
@@ -20,6 +21,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "Appearance"
         case .behavior:
             "Behavior"
+        case .windowManagement:
+            "Window Management"
         case .appIcons:
             "App Icons"
         case .permissions:
@@ -35,6 +38,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "paintbrush"
         case .behavior:
             "switch.2"
+        case .windowManagement:
+            "rectangle.on.rectangle"
         case .appIcons:
             "app.badge"
         case .permissions:
@@ -50,6 +55,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "Customize Docky’s look, chrome, and window tint."
         case .behavior:
             "Control placement, autohide, and system Dock behavior."
+        case .windowManagement:
+            "Configure global window switching and shortcut behavior."
         case .appIcons:
             "Choose per-app icon overrides for pinned and running apps."
         case .permissions:
@@ -59,7 +66,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         }
     }
     
-    static var allCases: [SettingsPane] = [.appearance, .behavior, .appIcons, .permissions]
+    static var allCases: [SettingsPane] = [.appearance, .behavior, .windowManagement, .appIcons, .permissions]
 }
 
 struct SettingsRootView: View {
@@ -97,6 +104,8 @@ private struct SettingsDetailView: View {
             AppearanceSettingsView()
         case .behavior:
             BehaviorSettingsView()
+        case .windowManagement:
+            WindowManagementSettingsView()
         case .appIcons:
             AppIconsSettingsView()
         case .permissions:

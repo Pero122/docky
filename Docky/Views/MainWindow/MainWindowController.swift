@@ -10,6 +10,7 @@ import AppKit
 final class MainWindowController: NSWindowController {
     private var dockEditorOverlayWindowController: DockEditorOverlayWindowController?
     private var launchpadOverlayWindowController: LaunchpadOverlayWindowController?
+    private var windowSwitcherOverlayWindowController: WindowSwitcherOverlayWindowController?
 
     override init(window: NSWindow?) {
         super.init(window: window)
@@ -20,6 +21,7 @@ final class MainWindowController: NSWindowController {
 
         dockEditorOverlayWindowController = DockEditorOverlayWindowController(mainWindow: mainWindow)
         launchpadOverlayWindowController = LaunchpadOverlayWindowController(mainWindow: mainWindow)
+        windowSwitcherOverlayWindowController = WindowSwitcherOverlayWindowController(mainWindow: mainWindow)
     }
 
     @available(*, unavailable)
