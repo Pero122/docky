@@ -27,8 +27,8 @@ struct MinimizedWindowTileView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .offset(x: 2, y: 2)
             }
-            .padding(.horizontal, 4)
         }
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -44,7 +44,7 @@ struct MinimizedWindowTileView: View {
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
                     .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
-                    .frame(width: cardSize.width, height: cardSize.height)
+                    .frame(width: cardSize.width - 4, height: cardSize.height - 4)
             } else {
                 Image(systemName: "rectangle.inset.filled")
                     .font(.system(size: cardSize.height * 0.42, weight: .medium))
