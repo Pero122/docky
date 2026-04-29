@@ -7,10 +7,12 @@
 //
 
 import AppKit
+import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct TileView: View {
+    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileFileDrop")
     let tile: Tile
     let isDragging: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
@@ -364,11 +366,16 @@ struct TileView: View {
             .contentShape(Rectangle())
             .onHover(perform: updateHoverState)
             .onTapGesture(perform: handleTap)
-            .onDrop(
-                of: [UTType.fileURL],
-                isTargeted: appDocumentDropIsTargetedBinding,
-                perform: handleAppDocumentDrop(providers:)
-            )
+            .onDrop(of: [UTType.fileURL], delegate: AppDocumentDropDelegate(
+                canHandleDrop: canHandleAppDocumentDrop(providers:),
+                logEvent: { message in
+                    Self.logger.debug(
+                        "App tile drop delegate tile=\(tile.id, privacy: .public) message=\(message, privacy: .public)"
+                    )
+                },
+                updateIsTargeted: { isFileDropTargeted = $0 },
+                performDrop: handleAppDocumentDrop(providers:)
+            ))
             .onDisappear {
                 isHovering = false
                 isTooltipPresented = false
@@ -906,19 +913,8 @@ struct TileView: View {
         return app.bundleIdentifier
     }
 
-    private var appDocumentDropIsTargetedBinding: Binding<Bool>? {
+    private func canHandleAppDocumentDrop(providers: [NSItemProvider]) -> Bool {
         guard appDocumentDropBundleIdentifier != nil else {
-            return nil
-        }
-
-        return Binding(
-            get: { isFileDropTargeted },
-            set: { isFileDropTargeted = $0 }
-        )
-    }
-
-    private func handleAppDocumentDrop(providers: [NSItemProvider]) -> Bool {
-        guard let bundleIdentifier = appDocumentDropBundleIdentifier else {
             return false
         }
 
@@ -929,11 +925,43 @@ struct TileView: View {
             return false
         }
 
+        let containsNonAppFile = fileURLProviders.contains { !isLikelyApplicationBundleProvider($0) }
+        let providerSummary = fileURLProviders.map(fileDropProviderDescription).joined(separator: ",")
+        Self.logger.debug(
+            "App tile drop eligibility tile=\(tile.id, privacy: .public) bundleIdentifier=\(appDocumentDropBundleIdentifier ?? "nil", privacy: .public) providerCount=\(fileURLProviders.count, privacy: .public) containsNonAppFile=\(containsNonAppFile, privacy: .public) providers=\(providerSummary, privacy: .public)"
+        )
+        return containsNonAppFile
+    }
+
+    private func handleAppDocumentDrop(providers: [NSItemProvider]) -> Bool {
+        guard canHandleAppDocumentDrop(providers: providers),
+              let bundleIdentifier = appDocumentDropBundleIdentifier else {
+            return false
+        }
+
+        let fileURLProviders = providers.filter {
+            $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+        }
+        guard !fileURLProviders.isEmpty else {
+            return false
+        }
+
+        Self.logger.info(
+            "App tile accepted drop tile=\(tile.id, privacy: .public) bundleIdentifier=\(bundleIdentifier, privacy: .public) providerCount=\(fileURLProviders.count, privacy: .public)"
+        )
+
         resolveDroppedFileURLs(from: fileURLProviders) { droppedURLs in
             let openableURLs = droppedURLs.filter { !isApplicationBundleURL($0) }
             guard !openableURLs.isEmpty else {
+                Self.logger.info(
+                    "App tile drop resolved only app bundles tile=\(self.tile.id, privacy: .public) resolvedURLs=\(droppedURLs.map(\.path).joined(separator: ","), privacy: .public)"
+                )
                 return
             }
+
+            Self.logger.info(
+                "App tile opening dropped files tile=\(self.tile.id, privacy: .public) bundleIdentifier=\(bundleIdentifier, privacy: .public) resolvedURLs=\(droppedURLs.map(\.path).joined(separator: ","), privacy: .public) openableURLs=\(openableURLs.map(\.path).joined(separator: ","), privacy: .public)"
+            )
 
             DispatchQueue.main.async {
                 WorkspaceService.shared.open(fileURLs: openableURLs, withApplicationBundleIdentifier: bundleIdentifier)
@@ -941,6 +969,26 @@ struct TileView: View {
         }
 
         return true
+    }
+
+    private func isLikelyApplicationBundleProvider(_ provider: NSItemProvider) -> Bool {
+        if let suggestedName = provider.suggestedName,
+           suggestedName.lowercased().hasSuffix(".app") {
+            return true
+        }
+
+        return provider.registeredTypeIdentifiers.contains { identifier in
+            guard let type = UTType(identifier) else {
+                return false
+            }
+            return type.conforms(to: .application)
+        }
+    }
+
+    private func fileDropProviderDescription(_ provider: NSItemProvider) -> String {
+        let suggestedName = provider.suggestedName ?? "nil"
+        let isLikelyApp = isLikelyApplicationBundleProvider(provider)
+        return "name=\(suggestedName) app=\(isLikelyApp) types=\(provider.registeredTypeIdentifiers.joined(separator: "|"))"
     }
 
     private func resolveDroppedFileURLs(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
@@ -1040,6 +1088,13 @@ struct TileView: View {
 
         if let showAsWidgetAction = showAsWidgetAction(for: app) {
             dockyOptions.append(showAsWidgetAction)
+        }
+
+        if let hideInDockyAction = hideInDockyAction(for: app) {
+            if !dockyOptions.isEmpty {
+                dockyOptions.append(.divider)
+            }
+            dockyOptions.append(hideInDockyAction)
         }
 
         guard !dockyOptions.isEmpty else {
@@ -1203,11 +1258,26 @@ struct TileView: View {
             actions.append(showAsWidgetAction)
         }
 
+        if let hideInDockyAction = hideInDockyAction(for: app) {
+            actions.append(hideInDockyAction)
+        }
+
         actions.append(.action("Show in Finder") {
             WorkspaceService.shared.revealApplicationInFinder(bundleIdentifier: app.bundleIdentifier)
         })
 
         return actions
+    }
+
+    private func hideInDockyAction(for app: AppTile) -> ContextAction? {
+        guard app.bundleIdentifier != Self.finderBundleIdentifier,
+              !preferences.isAppHiddenInDocky(bundleIdentifier: app.bundleIdentifier) else {
+            return nil
+        }
+
+        return .action("Hide in Docky") {
+            preferences.setAppHiddenInDocky(bundleIdentifier: app.bundleIdentifier, isHidden: true)
+        }
     }
 
     private func showAsWidgetAction(for app: AppTile) -> ContextAction? {
@@ -1583,6 +1653,55 @@ struct TileView: View {
         }
     }
 
+}
+
+private struct AppDocumentDropDelegate: DropDelegate {
+    let canHandleDrop: ([NSItemProvider]) -> Bool
+    let logEvent: (String) -> Void
+    let updateIsTargeted: (Bool) -> Void
+    let performDrop: ([NSItemProvider]) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        let providers = info.itemProviders(for: [UTType.fileURL])
+        let canHandle = canHandleDrop(providers)
+        logEvent("validate canHandle=\(canHandle) providerCount=\(providers.count)")
+        return canHandle
+    }
+
+    func dropEntered(info: DropInfo) {
+        let providers = info.itemProviders(for: [UTType.fileURL])
+        let canHandle = canHandleDrop(providers)
+        logEvent("entered canHandle=\(canHandle) providerCount=\(providers.count)")
+        updateIsTargeted(canHandle)
+    }
+
+    func dropExited(info: DropInfo) {
+        logEvent("exited")
+        updateIsTargeted(false)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let providers = info.itemProviders(for: [UTType.fileURL])
+        guard canHandleDrop(providers) else {
+            logEvent("updated canHandle=false providerCount=\(providers.count)")
+            return nil
+        }
+
+        logEvent("updated canHandle=true providerCount=\(providers.count)")
+        return DropProposal(operation: .copy)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        updateIsTargeted(false)
+        let providers = info.itemProviders(for: [UTType.fileURL])
+        guard canHandleDrop(providers) else {
+            logEvent("perform canHandle=false providerCount=\(providers.count)")
+            return false
+        }
+
+        logEvent("perform canHandle=true providerCount=\(providers.count)")
+        return performDrop(providers)
+    }
 }
 
 private struct LockedProductTileOverlay: View {

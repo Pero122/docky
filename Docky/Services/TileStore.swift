@@ -76,6 +76,14 @@ final class TileStore: ObservableObject {
                 self?.rebuildTiles()
             }
             .store(in: &cancellables)
+        preferences.$hiddenAppBundleIdentifiers
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshPinnedTilesFromPreferences()
+                self?.rebuildTiles()
+            }
+            .store(in: &cancellables)
         preferences.$trailingItems
             .dropFirst()
             .receive(on: DispatchQueue.main)
@@ -1670,14 +1678,22 @@ final class TileStore: ObservableObject {
             guard let bundleIdentifier = item.bundleIdentifier else {
                 return nil
             }
+            guard !preferences.isAppHiddenInDocky(bundleIdentifier: bundleIdentifier) else {
+                return nil
+            }
             if let tile = dockPinnedTilesByBundleIdentifier[bundleIdentifier] {
                 return Self.makePinnedTile(from: tile, item: item)
             }
             return Self.makePinnedTile(bundleIdentifier: bundleIdentifier, item: item)
         case .appFolder:
-            let apps = item.folderBundleIdentifiers.compactMap(Self.makeAppTile(bundleIdentifier:))
-            guard apps.count >= 2 else {
+            let apps = item.folderBundleIdentifiers
+                .filter { !preferences.isAppHiddenInDocky(bundleIdentifier: $0) }
+                .compactMap(Self.makeAppTile(bundleIdentifier:))
+            guard !apps.isEmpty else {
                 return nil
+            }
+            if apps.count == 1, let app = apps.first {
+                return Tile(id: Self.pinnedTileID(for: item), content: .app(app))
             }
             return Tile(
                 id: Self.pinnedTileID(for: item),
@@ -1783,9 +1799,14 @@ final class TileStore: ObservableObject {
     private func rebuildTiles() {
         let pinnedWithoutFinder = pinnedTiles.filter { !Self.isFinder($0) }
         let pinnedBundleIDs = Self.bundleIdentifiers(in: pinnedWithoutFinder)
+        let hiddenBundleIDs = Set(preferences.hiddenAppBundleIdentifiers)
 
         let currentUnpinned = WorkspaceService.shared.runningApps
-            .filter { $0.bundleIdentifier != Self.finderBundleID && !pinnedBundleIDs.contains($0.bundleIdentifier) }
+            .filter {
+                $0.bundleIdentifier != Self.finderBundleID
+                    && !pinnedBundleIDs.contains($0.bundleIdentifier)
+                    && !hiddenBundleIDs.contains($0.bundleIdentifier)
+            }
 
         displayedRunning = resolveDisplayedRunning(
             currentUnpinned: currentUnpinned,
@@ -1866,9 +1887,12 @@ final class TileStore: ObservableObject {
         }
 
         let runningBundleIdentifiers = WorkspaceService.shared.runningBundleIdentifiers
+        let hiddenBundleIdentifiers = Set(preferences.hiddenAppBundleIdentifiers)
         var result: [Tile] = []
 
-        for app in folder.apps where runningBundleIdentifiers.contains(app.bundleIdentifier) {
+        for app in folder.apps
+        where runningBundleIdentifiers.contains(app.bundleIdentifier)
+            && !hiddenBundleIdentifiers.contains(app.bundleIdentifier) {
             let tile = Tile(
                 id: "folder-running:\(folder.identifier):\(app.bundleIdentifier)",
                 content: .app(app)
@@ -1881,7 +1905,11 @@ final class TileStore: ObservableObject {
     }
 
     private func widgetTiles(for bundleIdentifier: String) -> [Tile] {
-        preferences.widgetPlacements
+        guard !preferences.isAppHiddenInDocky(bundleIdentifier: bundleIdentifier) else {
+            return []
+        }
+
+        return preferences.widgetPlacements
             .filter { $0.ownerBundleIdentifier == bundleIdentifier && $0.kind != .nowPlaying }
             .map { placement in
                 Tile(
@@ -1990,6 +2018,7 @@ final class TileStore: ObservableObject {
         currentUnpinned: [RunningApp],
         pinnedBundleIDs: Set<String>
     ) -> [RunningApp] {
+        let hiddenBundleIDs = Set(preferences.hiddenAppBundleIdentifiers)
         let currentMap = Dictionary(
             uniqueKeysWithValues: currentUnpinned.map { ($0.bundleIdentifier, $0) }
         )
@@ -1999,7 +2028,8 @@ final class TileStore: ObservableObject {
         var pendingGhost: RunningApp?
 
         for (index, existing) in displayedRunning.enumerated() {
-            if pinnedBundleIDs.contains(existing.bundleIdentifier) {
+            if pinnedBundleIDs.contains(existing.bundleIdentifier)
+                || hiddenBundleIDs.contains(existing.bundleIdentifier) {
                 continue
             }
             if let live = currentMap[existing.bundleIdentifier] {
@@ -2010,11 +2040,14 @@ final class TileStore: ObservableObject {
         }
 
         let existingIDs = Set(displayedRunning.map(\.bundleIdentifier))
-        for app in currentUnpinned where !existingIDs.contains(app.bundleIdentifier) {
+        for app in currentUnpinned
+        where !existingIDs.contains(app.bundleIdentifier)
+            && !hiddenBundleIDs.contains(app.bundleIdentifier) {
             survived.append(app)
         }
 
-        if let ghost = pendingGhost {
+        if let ghost = pendingGhost,
+           !hiddenBundleIDs.contains(ghost.bundleIdentifier) {
             let ghostLaunch = ghost.launchDate ?? .distantPast
             let hasNewer = survived.contains { app in
                 (app.launchDate ?? .distantPast) > ghostLaunch

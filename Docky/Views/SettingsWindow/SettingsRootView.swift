@@ -12,6 +12,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case launchpad
     case windowManagement
     case appIcons
+    case hiddenApps
     case permissions
     case actions
 
@@ -31,6 +32,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "Window Management"
         case .appIcons:
             "App Icons"
+        case .hiddenApps:
+            "Hidden Apps"
         case .permissions:
             "Permissions"
         case .actions:
@@ -52,6 +55,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "rectangle.on.rectangle"
         case .appIcons:
             "app.badge"
+        case .hiddenApps:
+            "eye.slash"
         case .permissions:
             "lock.shield"
         case .actions:
@@ -73,6 +78,8 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
             "Configure global window switching and shortcut behavior."
         case .appIcons:
             "Choose per-app icon overrides for pinned and running apps."
+        case .hiddenApps:
+            "Restore apps you previously hid from Docky's dock surface."
         case .permissions:
             "Review access status and request optional macOS permissions."
         case .actions:
@@ -84,12 +91,12 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .launchpad, .windowManagement, .appIcons, .actions:
             true
-        case .product, .appearance, .behavior, .permissions:
+        case .product, .appearance, .behavior, .hiddenApps, .permissions:
             false
         }
     }
 
-    static var allCases: [SettingsPane] = [.product, .appearance, .behavior, .launchpad, .windowManagement, .appIcons, .permissions, .actions]
+    static var allCases: [SettingsPane] = [.product, .appearance, .behavior, .launchpad, .windowManagement, .appIcons, .hiddenApps, .permissions, .actions]
 }
 
 struct SettingsRootView: View {
@@ -141,6 +148,8 @@ private struct SettingsDetailView: View {
             WindowManagementSettingsView()
         case .appIcons:
             AppIconsSettingsView()
+        case .hiddenApps:
+            HiddenAppsSettingsView()
         case .permissions:
             PermissionsSettingsView()
         case .actions:

@@ -785,6 +785,26 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Bundle identifiers hidden from Docky's app tile surfaces.
+    @Published var hiddenAppBundleIdentifiers: [String] {
+        didSet {
+            let normalizedIdentifiers = Self.normalizedBundleIdentifiers(hiddenAppBundleIdentifiers)
+            guard normalizedIdentifiers != oldValue else {
+                if hiddenAppBundleIdentifiers != normalizedIdentifiers {
+                    hiddenAppBundleIdentifiers = normalizedIdentifiers
+                }
+                return
+            }
+
+            if hiddenAppBundleIdentifiers != normalizedIdentifiers {
+                hiddenAppBundleIdentifiers = normalizedIdentifiers
+                return
+            }
+
+            defaults.set(normalizedIdentifiers, forKey: Keys.hiddenAppBundleIdentifiers)
+        }
+    }
+
     /// Whether opened apps from an app folder should appear grouped beside that folder.
     @Published var showsGroupedOpenedAppsInDock: Bool {
         didSet {
@@ -985,6 +1005,27 @@ final class DockyPreferences: ObservableObject {
         appIconOverrides.removeAll { $0.bundleIdentifier == bundleIdentifier }
     }
 
+    func isAppHiddenInDocky(bundleIdentifier: String) -> Bool {
+        hiddenAppBundleIdentifiers.contains(bundleIdentifier)
+    }
+
+    func setAppHiddenInDocky(bundleIdentifier: String, isHidden: Bool) {
+        guard !bundleIdentifier.isEmpty else {
+            return
+        }
+
+        var bundleIdentifiers = Set(hiddenAppBundleIdentifiers)
+        if isHidden {
+            bundleIdentifiers.insert(bundleIdentifier)
+        } else {
+            bundleIdentifiers.remove(bundleIdentifier)
+        }
+
+        hiddenAppBundleIdentifiers = bundleIdentifiers.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+    }
+
     static var defaultWindowTintColor: NSColor {
         NSColor.windowBackgroundColor.blended(withFraction: 0.18, of: .black) ?? .windowBackgroundColor
     }
@@ -1012,6 +1053,7 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorImagePath = "docky.activeIndicatorImagePath"
         static let activeIndicatorColor = "docky.activeIndicatorColor"
         static let appIconOverrides = "docky.appIconOverrides"
+        static let hiddenAppBundleIdentifiers = "docky.hiddenAppBundleIdentifiers"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
         static let launchpadGridColumnCount = "docky.launchpadGridColumnCount"
@@ -1050,6 +1092,7 @@ final class DockyPreferences: ObservableObject {
         static let activeIndicatorImagePath: String? = nil
         static let activeIndicatorColor: DockColor? = nil
         static let appIconOverrides: [AppIconOverride] = []
+        static let hiddenAppBundleIdentifiers: [String] = []
         static let showsGroupedOpenedAppsInDock = true
         static let enablesLaunchpadOverlay = true
         static let launchpadGridColumnCount = 7
@@ -1089,6 +1132,7 @@ final class DockyPreferences: ObservableObject {
         let storedActiveIndicatorImagePath = defaults.string(forKey: Keys.activeIndicatorImagePath)
         let storedActiveIndicatorColor = defaults.data(forKey: Keys.activeIndicatorColor)
         let storedAppIconOverrides = defaults.data(forKey: Keys.appIconOverrides)
+        let storedHiddenAppBundleIdentifiers = defaults.stringArray(forKey: Keys.hiddenAppBundleIdentifiers)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
         let storedLaunchpadGridColumnCount = defaults.object(forKey: Keys.launchpadGridColumnCount) as? Int
@@ -1127,6 +1171,7 @@ final class DockyPreferences: ObservableObject {
         self.activeIndicatorImagePath = storedActiveIndicatorImagePath ?? DefaultValues.activeIndicatorImagePath
         self.activeIndicatorColor = Self.decodeColor(from: storedActiveIndicatorColor) ?? DefaultValues.activeIndicatorColor
         self.appIconOverrides = Self.decodeAppIconOverrides(from: storedAppIconOverrides) ?? DefaultValues.appIconOverrides
+        self.hiddenAppBundleIdentifiers = Self.normalizedBundleIdentifiers(storedHiddenAppBundleIdentifiers ?? DefaultValues.hiddenAppBundleIdentifiers)
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
         self.launchpadGridColumnCount = max(storedLaunchpadGridColumnCount ?? DefaultValues.launchpadGridColumnCount, 1)
@@ -1174,6 +1219,7 @@ final class DockyPreferences: ObservableObject {
         activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
         activeIndicatorColor = DefaultValues.activeIndicatorColor
         appIconOverrides = DefaultValues.appIconOverrides
+        hiddenAppBundleIdentifiers = DefaultValues.hiddenAppBundleIdentifiers
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
         launchpadGridColumnCount = DefaultValues.launchpadGridColumnCount
@@ -1348,5 +1394,11 @@ final class DockyPreferences: ObservableObject {
         }
 
         return try? JSONDecoder().decode([TrailingTileItem].self, from: data)
+    }
+
+    private static func normalizedBundleIdentifiers(_ bundleIdentifiers: [String]) -> [String] {
+        Array(Set(bundleIdentifiers.filter { !$0.isEmpty })).sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
     }
 }
