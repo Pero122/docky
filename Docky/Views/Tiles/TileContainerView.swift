@@ -5,10 +5,12 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import OSLog
 
 struct TileContainerView: View {
     static let edgePadding: CGFloat = 8
     private let tileMutationAnimation: Animation = .easeInOut(duration: 0.18)
+    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileDrag")
 
     @ObservedObject private var store = TileStore.shared
     @ObservedObject private var dockSettings = DockSettingsService.shared
@@ -339,8 +341,7 @@ struct TileContainerView: View {
             }
 
             if isPinnedReorderable(tileID: tile.id)
-                || isTrailingReorderable(tileID: tile.id)
-                || shouldHideDraggedOriginalTile(tileID: tile.id) {
+                || isTrailingReorderable(tileID: tile.id) {
                 continue
             }
             result.append(tile)
@@ -1020,6 +1021,9 @@ struct TileContainerView: View {
             draggedTileInitialFrame = tileFrames[tile.id]
             draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
             draggedTrailingTileDestinationIndex = isTrailingReorderable(tileID: tile.id) ? trailingTileIDs.firstIndex(of: tile.id) : nil
+            Self.logger.info(
+                "Drag started tile=\(tileLogDescription(tile), privacy: .public) pinnedSource=\(isPinnedReorderable(tileID: tile.id), privacy: .public) trailingSource=\(isTrailingReorderable(tileID: tile.id), privacy: .public) startPinnedIndex=\(optionalIndexDescription(draggedPinnedTileDestinationIndex), privacy: .public) startTrailingIndex=\(optionalIndexDescription(draggedTrailingTileDestinationIndex), privacy: .public)"
+            )
         }
 
         guard draggedTileID == tile.id else {
@@ -1029,12 +1033,17 @@ struct TileContainerView: View {
         draggedTileOffset = projected(size: value.translation)
         draggedPickupCandidateTileID = dragPickupCandidateTileID(at: value.location)
 
-        if !draggedSelectionBundleIdentifiers.isEmpty,
+        if hasCollectedAdditionalAppsDuringDrag,
            let groupTargetTileID = appFolderDropTargetTileID(
                 at: value.location,
                 selectedTileIDs: draggedSelectionTileIDs,
                 selectedBundleIdentifiers: draggedSelectionBundleIdentifiers
              ) {
+            if draggedAppFolderTargetTileID != groupTargetTileID {
+                Self.logger.debug(
+                    "Drag folder target tile=\(tileLogDescription(tile), privacy: .public) targetTileID=\(groupTargetTileID, privacy: .public) selectionCount=\(draggedSelectionBundleIdentifiers.count, privacy: .public)"
+                )
+            }
             draggedAppFolderTargetTileID = groupTargetTileID
             draggedPinnedTileDestinationIndex = nil
             draggedTrailingTileDestinationIndex = nil
@@ -1051,6 +1060,7 @@ struct TileContainerView: View {
         updatePreviewDestination(
             at: projected(point: value.location),
             sourceTileID: tile.id,
+            isTileDrag: true,
             isPinnedSource: isPinnedReorderable(tileID: tile.id),
             isTrailingSource: isTrailingReorderable(tileID: tile.id),
             canDropIntoPinned: canDropInPinnedSection(tile),
@@ -1062,22 +1072,37 @@ struct TileContainerView: View {
         updateDrag(for: tile, value: value)
 
         guard draggedTileID == tile.id else {
+            Self.logger.info(
+                "Drag ended without active source tile=\(tileLogDescription(tile), privacy: .public)"
+            )
             clearDragState()
             return
         }
 
         if let groupTargetTileID = draggedAppFolderTargetTileID,
-           !draggedSelectionBundleIdentifiers.isEmpty {
+           hasCollectedAdditionalAppsDuringDrag {
+            Self.logger.info(
+                "Drag committing group tile=\(tileLogDescription(tile), privacy: .public) targetTileID=\(groupTargetTileID, privacy: .public) selectionCount=\(draggedSelectionBundleIdentifiers.count, privacy: .public)"
+            )
             _ = store.groupApps(bundleIdentifiers: draggedSelectionBundleIdentifiers, intoTileID: groupTargetTileID)
         } else if hasCollectedAdditionalAppsDuringDrag {
             // Multi-app pickup is only used for grouping into an app or folder target.
+            Self.logger.info(
+                "Drag ended with collected apps tile=\(tileLogDescription(tile), privacy: .public) additionalTileIDs=\(self.draggedAdditionalTileIDs.joined(separator: ","), privacy: .public)"
+            )
         } else if isPinnedReorderable(tileID: tile.id) {
             if let destinationIndex = draggedTrailingTileDestinationIndex,
                let trailingItem = draggedTile.flatMap(store.makeTrailingItem(from:)) {
+                Self.logger.info(
+                    "Drag moving pinned->trailing tile=\(tileLogDescription(tile), privacy: .public) destinationIndex=\(destinationIndex, privacy: .public)"
+                )
                 store.removePinnedItem(tileID: tile.id)
                 store.insertTrailingItem(trailingItem, at: destinationIndex)
             } else {
                 let finalPinnedTileIDs = previewPinnedBaseTiles.map(\.id)
+                Self.logger.info(
+                    "Drag reordering pinned tile=\(tileLogDescription(tile), privacy: .public) finalPinnedIDs=\(finalPinnedTileIDs.joined(separator: ","), privacy: .public)"
+                )
                 if finalPinnedTileIDs != pinnedTileIDs {
                     store.setPinnedTileOrder(ids: finalPinnedTileIDs)
                 }
@@ -1085,17 +1110,30 @@ struct TileContainerView: View {
         } else if isTrailingReorderable(tileID: tile.id) {
             if let destinationIndex = draggedPinnedTileDestinationIndex,
                let pinnedItem = draggedTile.flatMap(store.makePinnedItem(from:)) {
+                Self.logger.info(
+                    "Drag moving trailing->pinned tile=\(tileLogDescription(tile), privacy: .public) destinationIndex=\(destinationIndex, privacy: .public)"
+                )
                 store.removeTrailingItem(tileID: tile.id)
                 store.insertPinnedItem(pinnedItem, at: destinationIndex)
             } else {
                 let finalTrailingTileIDs = previewTrailingTiles.map(\.id)
+                Self.logger.info(
+                    "Drag reordering trailing tile=\(tileLogDescription(tile), privacy: .public) finalTrailingIDs=\(finalTrailingTileIDs.joined(separator: ","), privacy: .public)"
+                )
                 if finalTrailingTileIDs != trailingTileIDs {
                     store.setTrailingTileOrder(ids: finalTrailingTileIDs)
                 }
             }
         } else if let destinationIndex = draggedPinnedTileDestinationIndex,
                   let bundleIdentifier = draggedBundleIdentifier {
+            Self.logger.info(
+                "Drag pinning app tile=\(tileLogDescription(tile), privacy: .public) bundleIdentifier=\(bundleIdentifier, privacy: .public) destinationIndex=\(destinationIndex, privacy: .public)"
+            )
             _ = store.pinApp(bundleIdentifier: bundleIdentifier, at: destinationIndex)
+        } else {
+            Self.logger.info(
+                "Drag ended with no mutation tile=\(tileLogDescription(tile), privacy: .public) pinnedDestination=\(optionalIndexDescription(draggedPinnedTileDestinationIndex), privacy: .public) trailingDestination=\(optionalIndexDescription(draggedTrailingTileDestinationIndex), privacy: .public) folderTarget=\(draggedAppFolderTargetTileID ?? "nil", privacy: .public)"
+            )
         }
 
         withAnimation(tileMutationAnimation) {
@@ -1147,34 +1185,60 @@ struct TileContainerView: View {
     private func updatePreviewDestination(
         at positionValue: CGFloat,
         sourceTileID: String,
+        isTileDrag: Bool,
         isPinnedSource: Bool,
         isTrailingSource: Bool,
         canDropIntoPinned: Bool,
         canDropIntoTrailing: Bool
     ) {
         if canDropIntoPinned && isPointInPinnedDropRegion(positionValue) {
-            updateDropDestination(for: .pinned, at: positionValue, sourceTileID: sourceTileID, isSectionSource: isPinnedSource)
-            if isTrailingSource {
+            if draggedPinnedTileDestinationIndex == nil || draggedTrailingTileDestinationIndex != nil {
+                Self.logger.debug(
+                    "Drag entered pinned region sourceTileID=\(sourceTileID, privacy: .public) position=\(positionValue, privacy: .public) pinnedSource=\(isPinnedSource, privacy: .public) trailingSource=\(isTrailingSource, privacy: .public) canDropPinned=\(canDropIntoPinned, privacy: .public) canDropTrailing=\(canDropIntoTrailing, privacy: .public)"
+                )
+            }
+            updateDropDestination(for: .pinned, at: positionValue, sourceTileID: sourceTileID, isTileDrag: isTileDrag)
+            if isTileDrag {
+                if draggedTrailingTileDestinationIndex != nil {
+                    Self.logger.debug(
+                        "Drag clearing trailing preview sourceTileID=\(sourceTileID, privacy: .public) because pointer entered pinned region"
+                    )
+                }
                 draggedTrailingTileDestinationIndex = nil
             }
             return
         }
 
         if canDropIntoTrailing && isPointInTrailingDropRegion(positionValue) {
-            updateDropDestination(for: .trailing, at: positionValue, sourceTileID: sourceTileID, isSectionSource: isTrailingSource)
-            if isPinnedSource {
+            if draggedTrailingTileDestinationIndex == nil || draggedPinnedTileDestinationIndex != nil {
+                Self.logger.debug(
+                    "Drag entered trailing region sourceTileID=\(sourceTileID, privacy: .public) position=\(positionValue, privacy: .public) pinnedSource=\(isPinnedSource, privacy: .public) trailingSource=\(isTrailingSource, privacy: .public) canDropPinned=\(canDropIntoPinned, privacy: .public) canDropTrailing=\(canDropIntoTrailing, privacy: .public)"
+                )
+            }
+            updateDropDestination(for: .trailing, at: positionValue, sourceTileID: sourceTileID, isTileDrag: isTileDrag)
+            if isTileDrag {
+                if draggedPinnedTileDestinationIndex != nil {
+                    Self.logger.debug(
+                        "Drag clearing pinned preview sourceTileID=\(sourceTileID, privacy: .public) because pointer entered trailing region"
+                    )
+                }
                 draggedPinnedTileDestinationIndex = nil
             }
             return
         }
 
-        if isPinnedSource {
+        if draggedPinnedTileDestinationIndex != nil || draggedTrailingTileDestinationIndex != nil {
+            Self.logger.debug(
+                "Drag left drop regions sourceTileID=\(sourceTileID, privacy: .public) position=\(positionValue, privacy: .public) pinnedSource=\(isPinnedSource, privacy: .public) trailingSource=\(isTrailingSource, privacy: .public)"
+            )
+        }
+        if isTileDrag {
             draggedPinnedTileDestinationIndex = nil
         }
-        if isTrailingSource {
+        if isTileDrag {
             draggedTrailingTileDestinationIndex = nil
         }
-        if !isPinnedSource && !isTrailingSource {
+        if !isTileDrag {
             editMode.paletteDropDestination = nil
         }
     }
@@ -1183,7 +1247,7 @@ struct TileContainerView: View {
         for section: DockEditDropSection,
         at positionValue: CGFloat,
         sourceTileID: String,
-        isSectionSource: Bool
+        isTileDrag: Bool
     ) {
         let visibleTiles = previewTiles(for: section).filter { $0.id != sourceTileID }
         let destinationIndex = visibleTiles.enumerated().first { _, tile in
@@ -1194,13 +1258,17 @@ struct TileContainerView: View {
             return positionValue < midpoint
         }?.offset ?? visibleTiles.count
 
-        let currentDestinationIndex = currentDropDestinationIndex(for: section, isSectionSource: isSectionSource)
+        let currentDestinationIndex = currentDropDestinationIndex(for: section, isTileDrag: isTileDrag)
         guard currentDestinationIndex != destinationIndex else {
             return
         }
 
+        Self.logger.debug(
+            "Drag destination updated sourceTileID=\(sourceTileID, privacy: .public) section=\(dropSectionDescription(section), privacy: .public) index=\(destinationIndex, privacy: .public) previous=\(optionalIndexDescription(currentDestinationIndex), privacy: .public) visibleTileCount=\(visibleTiles.count, privacy: .public) position=\(positionValue, privacy: .public) tileDrag=\(isTileDrag, privacy: .public)"
+        )
+
         withAnimation(tileMutationAnimation) {
-            setDropDestination(section: section, index: destinationIndex, isSectionSource: isSectionSource)
+            setDropDestination(section: section, index: destinationIndex, isTileDrag: isTileDrag)
         }
     }
 
@@ -1218,6 +1286,7 @@ struct TileContainerView: View {
         updatePreviewDestination(
             at: projected(point: location),
             sourceTileID: palettePreviewTile.id,
+            isTileDrag: false,
             isPinnedSource: false,
             isTrailingSource: false,
             canDropIntoPinned: makePinnedItem(from: editMode.paletteDrag) != nil,
@@ -1410,8 +1479,8 @@ struct TileContainerView: View {
         }
     }
 
-    private func currentDropDestinationIndex(for section: DockEditDropSection, isSectionSource: Bool) -> Int? {
-        if isSectionSource {
+    private func currentDropDestinationIndex(for section: DockEditDropSection, isTileDrag: Bool) -> Int? {
+        if isTileDrag {
             return switch section {
             case .pinned: draggedPinnedTileDestinationIndex
             case .trailing: draggedTrailingTileDestinationIndex
@@ -1424,8 +1493,8 @@ struct TileContainerView: View {
         return editMode.paletteDropDestination?.index
     }
 
-    private func setDropDestination(section: DockEditDropSection, index: Int?, isSectionSource: Bool) {
-        if isSectionSource {
+    private func setDropDestination(section: DockEditDropSection, index: Int?, isTileDrag: Bool) {
+        if isTileDrag {
             switch section {
             case .pinned:
                 draggedPinnedTileDestinationIndex = index
@@ -1443,6 +1512,11 @@ struct TileContainerView: View {
     }
 
     private func clearDragState() {
+        if draggedTileID != nil {
+            Self.logger.debug(
+                "Clearing drag state tileID=\(draggedTileID ?? "nil", privacy: .public) pinnedDestination=\(optionalIndexDescription(draggedPinnedTileDestinationIndex), privacy: .public) trailingDestination=\(optionalIndexDescription(draggedTrailingTileDestinationIndex), privacy: .public) folderTarget=\(draggedAppFolderTargetTileID ?? "nil", privacy: .public)"
+            )
+        }
         draggedTileID = nil
         draggedTileOffset = 0
         draggedTileInitialFrame = nil
@@ -1458,6 +1532,51 @@ struct TileContainerView: View {
             return nil
         }
         return app.bundleIdentifier.isEmpty ? nil : app.bundleIdentifier
+    }
+
+    private func optionalIndexDescription(_ index: Int?) -> String {
+        guard let index else {
+            return "nil"
+        }
+        return String(index)
+    }
+
+    private func dropSectionDescription(_ section: DockEditDropSection) -> String {
+        switch section {
+        case .pinned:
+            return "pinned"
+        case .trailing:
+            return "trailing"
+        }
+    }
+
+    private func tileLogDescription(_ tile: Tile) -> String {
+        "\(tile.id):\(tileKindDescription(tile))"
+    }
+
+    private func tileKindDescription(_ tile: Tile) -> String {
+        switch tile.content {
+        case .app(let app):
+            return "app(\(app.bundleIdentifier))"
+        case .appFolder(let folder):
+            return "appFolder(\(folder.identifier))"
+        case .folder(let folder):
+            return "folder(\(folder.url.lastPathComponent))"
+        case .widget(let widget):
+            return "widget(\(widget.kind.rawValue))"
+        case .smartStack:
+            return "smartStack"
+        case .spacer:
+            return "spacer"
+        case .divider:
+            return "divider"
+        case .launchpad:
+            return "launchpad"
+        case .trash:
+            return "trash"
+        case .minimizedWindow(let window):
+            return "minimizedWindow(\(window.windowIdentifier))"
+        }
     }
 
     private func bundleIdentifier(forTileID tileID: String) -> String? {
