@@ -243,6 +243,14 @@ final class WindowSwitcherService: ObservableObject {
                 self.refreshSelectionPresentation()
             }
             .store(in: &cancellables)
+
+        PermissionsService.shared.$accessibility
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateGlobalEventMonitors()
+            }
+            .store(in: &cancellables)
     }
 
     private func observeWindowPreviews() {
@@ -281,6 +289,19 @@ final class WindowSwitcherService: ObservableObject {
         localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleModifierReleaseIfNeeded(flags: event.modifierFlags)
             return event
+        }
+
+        updateGlobalEventMonitors()
+    }
+
+    private func updateGlobalEventMonitors() {
+        if let globalFlagsMonitor {
+            NSEvent.removeMonitor(globalFlagsMonitor)
+            self.globalFlagsMonitor = nil
+        }
+
+        guard PermissionsService.shared.accessibility == .granted else {
+            return
         }
 
         globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in

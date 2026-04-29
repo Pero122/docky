@@ -213,6 +213,15 @@ final class MainWindow: NSWindow {
                 self?.updatePointerScreenMonitoring()
             }
             .store(in: &cancellables)
+
+        PermissionsService.shared.$accessibility
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.lastPointerScreenFrame = nil
+                self?.updatePointerScreenMonitoring()
+            }
+            .store(in: &cancellables)
     }
 
     private func observeVisibilityInputs() {
@@ -241,8 +250,10 @@ final class MainWindow: NSWindow {
         guard preferences.windowDisplayTarget == .displayContainingPointer else { return }
 
         let pointerEvents: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel]
-        globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: pointerEvents) { [weak self] _ in
-            self?.handlePointerScreenChangeIfNeeded()
+        if PermissionsService.shared.accessibility == .granted {
+            globalPointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: pointerEvents) { [weak self] _ in
+                self?.handlePointerScreenChangeIfNeeded()
+            }
         }
         localPointerMonitor = NSEvent.addLocalMonitorForEvents(matching: pointerEvents) { [weak self] event in
             self?.handlePointerScreenChangeIfNeeded()
