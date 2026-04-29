@@ -4,6 +4,7 @@
 //
 
 import AppKit
+import AVKit
 import SwiftUI
 
 private struct PermissionsCardSizePreferenceKey: PreferenceKey {
@@ -120,17 +121,7 @@ struct PermissionsView: View {
     }
 
     private var topSection: some View {
-        ZStack {
-            LinearGradient(
-                colors: heroGradient,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .opacity(0.75)
-
-            mediaArtwork
-                .padding(28)
-        }
+        mediaArtwork
         .frame(height: 316)
     }
 
@@ -170,98 +161,68 @@ struct PermissionsView: View {
     }
 
     private var mediaArtwork: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12))
-
-            Circle()
-                .fill(Color.white.opacity(0.12))
-                .frame(width: 220, height: 220)
-                .blur(radius: 18)
-                .offset(x: -150, y: -70)
-
-            Circle()
-                .fill(Color.black.opacity(0.22))
-                .frame(width: 280, height: 280)
-                .blur(radius: 24)
-                .offset(x: 180, y: 100)
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.black.opacity(0.18))
-
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10))
-
-                VStack(spacing: 18) {
-                    HStack(spacing: 10) {
-                        Circle().fill(Color.white.opacity(0.85)).frame(width: 8, height: 8)
-                        Circle().fill(Color.white.opacity(0.30)).frame(width: 8, height: 8)
-                        Circle().fill(Color.white.opacity(0.30)).frame(width: 8, height: 8)
-                        Spacer()
+        ZStack(alignment: .topLeading) {
+            if let mediaResourceName {
+                LoopingVideoView(resourceName: mediaResourceName, fileExtension: "mp4")
+                    .overlay {
+                        LinearGradient(
+                            colors: [Color.black.opacity(0.34), Color.clear, Color.black.opacity(0.18)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
-
-                    Spacer()
-
-                    HStack(alignment: .bottom, spacing: 18) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: dockyAppURL.path))
-                            .resizable()
-                            .interpolation(.high)
-                            .frame(width: 88, height: 88)
-                            .shadow(color: Color.black.opacity(0.18), radius: 16, y: 10)
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("Docky Setup", systemImage: "sparkles.rectangle.stack")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.92))
-
-                            Text(mediaCaption)
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: stepSymbolName)
-                            .font(.system(size: 40, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 84, height: 84)
-                            .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(0.12))
-                            )
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(
+                            colors: [Color.clear, Color.black.opacity(0.18)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
-                }
-                .padding(22)
+            } else {
+                fallbackMediaSurface
             }
-            .padding(.horizontal, 46)
-            .padding(.vertical, 34)
-            .rotationEffect(.degrees(-2.2))
-
-            floatingMediaBadge
-                .offset(x: 210, y: -74)
         }
     }
 
-    private var floatingMediaBadge: some View {
-        HStack(spacing: 10) {
-            Image(systemName: stepSymbolName)
-                .font(.system(size: 14, weight: .bold))
-            Text(mediaBadgeTitle)
-                .font(.system(size: 12, weight: .semibold))
+    private var fallbackMediaSurface: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                colors: [Color.white.opacity(0.10), Color.black.opacity(0.10)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            HStack(alignment: .bottom, spacing: 18) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: dockyAppURL.path))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 88, height: 88)
+                    .shadow(color: Color.black.opacity(0.18), radius: 16, y: 10)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Docky Setup", systemImage: "sparkles.rectangle.stack")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+
+                    Text(mediaCaption)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer()
+
+                Image(systemName: stepSymbolName)
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 84, height: 84)
+                    .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.12))
+                    )
+            }
+            .padding(22)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.black.opacity(0.24), in: Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.12))
-        )
     }
 
     private var onboardingBackground: some View {
@@ -526,6 +487,18 @@ struct PermissionsView: View {
             dismissOnboarding()
         } else {
             currentIndex += 1
+            openNextStepSystemSettings()
+        }
+    }
+
+    private func openNextStepSystemSettings() {
+        guard !isDismissing else { return }
+
+        let nextStep = step
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !isDismissing, self.step == nextStep else { return }
+            onOpenSystemSettings(nextStep)
         }
     }
 
@@ -611,20 +584,20 @@ struct PermissionsView: View {
         }
     }
 
-    private var mediaBadgeTitle: String {
+    private var mediaResourceName: String? {
         switch step {
         case .userFolders:
-            return "Folder previews"
+            return "folder-preview"
         case .finderAutomation:
-            return "Finder actions"
+            return "trash"
         case .accessibility:
-            return "UI control"
+            return "window-switching"
         case .systemEventsAutomation:
-            return "Automation"
+            return "automation"
         case .screenCapture:
-            return "Window previews"
+            return "window-switching"
         case .location:
-            return "Weather"
+            return nil
         }
     }
 
@@ -677,6 +650,99 @@ struct PermissionsView: View {
         case .notDetermined:
             return .white
         }
+    }
+}
+
+private final class LoopingPlayerView: NSView {
+    private var queuePlayer: AVQueuePlayer?
+    private var looper: AVPlayerLooper?
+    private var currentURL: URL?
+
+    override func makeBackingLayer() -> CALayer {
+        AVPlayerLayer()
+    }
+
+    private var playerLayer: AVPlayerLayer {
+        guard let layer = layer as? AVPlayerLayer else {
+            fatalError("Expected AVPlayerLayer backing layer")
+        }
+        return layer
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        wantsLayer = true
+        playerLayer.videoGravity = .resizeAspectFill
+    }
+
+    override func layout() {
+        super.layout()
+        updateVideoRect()
+    }
+
+    func configure(url: URL?) {
+        guard currentURL != url else { return }
+        currentURL = url
+
+        guard let url else {
+            playerLayer.player = nil
+            queuePlayer = nil
+            looper = nil
+            return
+        }
+
+        let item = AVPlayerItem(url: url)
+        let player = AVQueuePlayer()
+        player.isMuted = true
+        player.preventsDisplaySleepDuringVideoPlayback = false
+        looper = AVPlayerLooper(player: player, templateItem: item)
+        queuePlayer = player
+        playerLayer.player = player
+        player.play()
+    }
+
+    private func updateVideoRect() {
+        guard let presentationSize = playerLayer.player?.currentItem?.presentationSize,
+              presentationSize.width > 0,
+              presentationSize.height > 0,
+              bounds.width > 0,
+              bounds.height > 0 else {
+            playerLayer.frame = bounds
+            return
+        }
+
+        let scale = max(bounds.width / presentationSize.width, bounds.height / presentationSize.height)
+        let size = CGSize(width: presentationSize.width * scale, height: presentationSize.height * scale)
+        let origin = CGPoint(x: (bounds.width - size.width) / 2, y: 0)
+        playerLayer.frame = CGRect(origin: origin, size: size)
+    }
+}
+
+private struct LoopingVideoView: NSViewRepresentable {
+    let resourceName: String
+    let fileExtension: String
+
+    func makeNSView(context: Context) -> LoopingPlayerView {
+        let view = LoopingPlayerView()
+        view.configure(url: mediaURL)
+        return view
+    }
+
+    func updateNSView(_ nsView: LoopingPlayerView, context: Context) {
+        nsView.configure(url: mediaURL)
+    }
+
+    private var mediaURL: URL? {
+        Bundle.main.url(forResource: resourceName, withExtension: fileExtension)
     }
 }
 
