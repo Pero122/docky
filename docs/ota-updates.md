@@ -4,7 +4,7 @@ Docky uses Sparkle 2 for direct-distribution updates.
 
 ## Configured URLs and Keys
 
-- Appcast URL: `https://docky.quintero.gt/appcast.xml`
+- Appcast URL: `https://getdocky.com/releases/appcast.xml`
 - Sparkle public key: `LfZUqraK4HiOj/+9iztgnWzdQTrC1ccmJPp/Fy/aTPc=`
 
 The corresponding private key was generated with Sparkle's `generate_keys` tool and stored in this Mac's login keychain.
@@ -12,7 +12,7 @@ The corresponding private key was generated with Sparkle's `generate_keys` tool 
 ## One-time Setup
 
 1. Create a `notarytool` keychain profile if you want the release script to notarize automatically.
-2. Make sure `https://docky.quintero.gt/` can host static files over HTTPS.
+2. Make sure `https://getdocky.com/` can host static files over HTTPS.
 3. Keep the Sparkle private key on a trusted machine only.
 
 Example `notarytool` setup:
@@ -39,7 +39,7 @@ RELEASE_NOTES_FILE=build/release-notes.md \
 scripts/release_sparkle_update.sh
 ```
 
-4. Upload every file from `build/updates/` to `https://docky.quintero.gt/` and replace the starter `appcast.xml` there.
+4. Copy every file from `build/updates/` into `docky-website/static/releases/` and deploy the site.
 
 Generated output includes:
 
@@ -66,3 +66,4 @@ defaults delete gt.quintero.Docky SULastCheckTime
 - Sparkle stores user update preferences in `UserDefaults`; Docky does not duplicate them.
 - Sparkle's `generate_appcast` tool signs update metadata using the private key in your keychain.
 - Keep the private key safe. If you need to move it to another Mac, export/import it using Sparkle's key tools.
+- The website repo's release drop folder is `docky-website/static/releases/`.
