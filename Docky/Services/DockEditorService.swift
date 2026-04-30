@@ -56,7 +56,7 @@ final class DockEditorService {
         }
 
         restartDock()
-        TileStore.shared.refresh()
+        TileStore.shared.refreshAfterDockyEditedSystemDock()
         return true
     }
 
@@ -90,7 +90,7 @@ final class DockEditorService {
         }
 
         restartDock()
-        TileStore.shared.refresh()
+        TileStore.shared.refreshAfterDockyEditedSystemDock()
         return true
     }
 

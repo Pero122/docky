@@ -6,6 +6,8 @@
 //
 
 import Cocoa
+import Sentry
+
 import Combine
 import Sparkle
 
@@ -20,8 +22,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var debugStatusItem: NSStatusItem?
     private var debugSnapshotTextView: NSTextView?
     private var debugSnapshotCancellables = Set<AnyCancellable>()
+    private let sessionID = UUID().uuidString.lowercased()
+    private let sessionStartedAt = Date()
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        configureSentry()
+
         window?.orderOut(nil)
         NSApplication.shared.setActivationPolicy(.accessory)
         configureMainMenu()
@@ -32,7 +38,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         _ = AppUpdateService.shared
         _ = ProductService.shared
-        AnalyticsService.shared.configureIfNeeded()
         _ = LaunchpadHotKeyService.shared
 
         DockyPreferences.shared.applySystemDockVisibilityPreference()
@@ -40,6 +45,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         TileStore.shared.syncPreferencesFromSystemDockIfNeeded()
 
         PermissionsService.shared.refresh()
+        logSessionStart()
+
         if PermissionsService.shared.setupComplete {
             PermissionsService.shared.markInitialOnboardingCompleted()
             showMainWindow()
@@ -53,9 +60,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        logSessionEnd()
+
         if SystemDockVisibilityService.shared.hasSnapshot {
             SystemDockVisibilityService.shared.restore()
         }
+
+        SentrySDK.close()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -175,6 +186,64 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         #if DEBUG
         installDebugStatusItem()
         #endif
+    }
+
+    private func configureSentry() {
+        SentrySDK.start { options in
+            options.dsn = "https://5eebd9ca17d595aa7c9cdebc54a0746a@o4511308909510656.ingest.us.sentry.io/4511308910952448"
+            options.sendDefaultPii = false
+            options.enableCrashHandler = false
+            options.enableAutoSessionTracking = false
+            options.enableWatchdogTerminationTracking = false
+            options.enableAppHangTracking = false
+            options.enableNetworkBreadcrumbs = false
+            options.tracesSampleRate = 0
+            options.shutdownTimeInterval = 2
+            options.enableLogs = true
+            options.beforeSend = { _ in nil }
+            options.beforeSendSpan = { _ in nil }
+            options.beforeSendLog = { log in
+                guard log.attributes["scope"]?.value as? String == "session" else {
+                    return nil
+                }
+
+                return log
+            }
+        }
+    }
+
+    private func logSessionStart() {
+        SentrySDK.logger.info("Docky session started", attributes: sessionLogAttributes(phase: "start"))
+    }
+
+    private func logSessionEnd() {
+        var attributes = sessionLogAttributes(phase: "end")
+        attributes["session.duration_ms"] = Int(Date().timeIntervalSince(sessionStartedAt) * 1000)
+        SentrySDK.logger.info("Docky session ended", attributes: attributes)
+    }
+
+    private func sessionLogAttributes(phase: String) -> [String: Any] {
+        [
+            "scope": "session",
+            "session.id": sessionID,
+            "session.phase": phase,
+            "app.version": shortVersion,
+            "app.build": buildNumber,
+            "product.tier": ProductService.shared.currentTier.rawValue,
+            "permissions.required_granted": PermissionsService.shared.allRequiredGranted,
+            "permissions.setup_complete": PermissionsService.shared.setupComplete,
+            "permissions.onboarding_completed": PermissionsService.shared.hasCompletedInitialOnboarding,
+            "permissions.missing_required_count": PermissionsService.shared.missingRequiredPermissions.count,
+            "permissions.missing_count": PermissionsService.shared.missingPermissions.count,
+        ]
+    }
+
+    private var shortVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
     }
 
     #if DEBUG

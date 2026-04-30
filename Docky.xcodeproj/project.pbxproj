@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		11051E012F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 11051E002F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		113717682FA17B980012480C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 113717672FA17B980012480C /* Sparkle */; };
-		116A00152FD4D00100123456 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = 116A00142FD4D00100123456 /* PostHog */; };
+		57888E56F28A4BE585ED8E56 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 6CC6084E3F2D4C5EB27F8E8B /* Sentry */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -44,8 +44,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				116A00152FD4D00100123456 /* PostHog in Frameworks */,
 				113717682FA17B980012480C /* Sparkle in Frameworks */,
+				57888E56F28A4BE585ED8E56 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -88,6 +88,7 @@
 				11051DE42F929079005CE09D /* Frameworks */,
 				11051DE52F929079005CE09D /* Resources */,
 				11051E022F929079005CE09D /* Embed Frameworks */,
+				8C2157CA1EC44443B69BF4BB /* Upload Debug Symbols to Sentry */,
 			);
 			buildRules = (
 			);
@@ -98,8 +99,8 @@
 			);
 			name = Docky;
 			packageProductDependencies = (
-				116A00142FD4D00100123456 /* PostHog */,
 				113717672FA17B980012480C /* Sparkle */,
+				6CC6084E3F2D4C5EB27F8E8B /* Sentry */,
 			);
 			productName = Docky;
 			productReference = 11051DE72F929079005CE09D /* Docky.app */;
@@ -130,8 +131,8 @@
 			mainGroup = 11051DDE2F929079005CE09D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				116A00132FD4D00100123456 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */,
+				8BF6581FFF1E448CB55CE88B /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 11051DE82F929079005CE09D /* Products */;
@@ -152,6 +153,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		8C2157CA1EC44443B69BF4BB /* Upload Debug Symbols to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${TARGET_NAME}",
+			);
+			name = "Upload Debug Symbols to Sentry";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script is responsible for uploading debug symbols and source context for Sentry.\nif which sentry-cli >/dev/null; then\n  export SENTRY_ORG=quintero\n  export SENTRY_PROJECT=docky\n  ERROR=$(sentry-cli debug-files upload --include-sources \"$DWARF_DSYM_FOLDER_PATH\" 2>&1 >/dev/null)\n  if [ ! $? -eq 0 ]; then\n    echo \"warning: sentry-cli - $ERROR\"\n  fi\nelse\n  echo \"warning: sentry-cli not installed, download from https://github.com/getsentry/sentry-cli/releases\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		11051DE32F929079005CE09D /* Sources */ = {
@@ -294,6 +313,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 202604297;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 2KC3797KP9;
 				ENABLE_APPLE_EVENTS = YES;
 				ENABLE_APP_SANDBOX = NO;
@@ -309,6 +329,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Docky/Frameworks",
@@ -361,6 +382,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 202604297;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 2KC3797KP9;
 				ENABLE_APPLE_EVENTS = YES;
 				ENABLE_APP_SANDBOX = NO;
@@ -376,6 +398,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/Docky/Frameworks",
@@ -450,12 +473,12 @@
 				minimumVersion = 2.9.1;
 			};
 		};
-		116A00132FD4D00100123456 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
+		8BF6581FFF1E448CB55CE88B /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/PostHog/posthog-ios.git";
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa/";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 3.57.3;
+				minimumVersion = 9.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -466,10 +489,10 @@
 			package = 113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
 		};
-		116A00142FD4D00100123456 /* PostHog */ = {
+		6CC6084E3F2D4C5EB27F8E8B /* Sentry */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 116A00132FD4D00100123456 /* XCRemoteSwiftPackageReference "posthog-ios" */;
-			productName = PostHog;
+			package = 8BF6581FFF1E448CB55CE88B /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

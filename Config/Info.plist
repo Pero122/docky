@@ -42,10 +42,6 @@
 	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
-	<key>PostHogHost</key>
-	<string>https://us.i.posthog.com</string>
-	<key>PostHogProjectToken</key>
-	<string>phc_pARgZgJoMH8Cn4RPRMAA7EfP5yYLQj7Dooua3dnGRaJL</string>
 	<key>SUFeedURL</key>
 	<string>https://getdocky.com/releases/appcast.xml</string>
 	<key>SUPublicEDKey</key>

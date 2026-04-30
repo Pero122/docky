@@ -19,6 +19,7 @@ final class TileStore: ObservableObject {
     @Published private(set) var tiles: [Tile] = []
 
     private static let changeNotification = Notification.Name("com.apple.dock.prefchanged")
+    private static let hasImportedSystemDockPreferencesKey = "docky.tileStore.hasImportedSystemDockPreferences"
     private static let demoDebugPinnedAppNames = [
         "Dia",
         "Notes",
@@ -48,6 +49,7 @@ final class TileStore: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private let preferences = DockyPreferences.shared
     private let mediaPlayback = MediaPlaybackService.shared
+    private let defaults = UserDefaults.standard
 
     private init() {
         reloadSystemDockState(syncPreferencesFromSystemDock: false)
@@ -136,15 +138,25 @@ final class TileStore: ObservableObject {
     }
 
     func refresh() {
+        reloadSystemDockState(syncPreferencesFromSystemDock: false)
+    }
+
+    func refreshAfterDockyEditedSystemDock() {
         reloadSystemDockState(syncPreferencesFromSystemDock: true)
     }
 
     func syncPreferencesFromSystemDockIfNeeded() {
+        guard !hasImportedSystemDockPreferences else {
+            return
+        }
+
         guard preferences.pinnedItems.isEmpty, preferences.trailingItems.isEmpty else {
+            hasImportedSystemDockPreferences = true
             return
         }
 
         reloadSystemDockState(syncPreferencesFromSystemDock: true)
+        hasImportedSystemDockPreferences = true
     }
 
     private func reloadSystemDockState(syncPreferencesFromSystemDock: Bool) {
@@ -181,6 +193,11 @@ final class TileStore: ObservableObject {
         }
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
+    }
+
+    private var hasImportedSystemDockPreferences: Bool {
+        get { defaults.bool(forKey: Self.hasImportedSystemDockPreferencesKey) }
+        set { defaults.set(newValue, forKey: Self.hasImportedSystemDockPreferencesKey) }
     }
 
     func isPinnedReorderable(tileID: String) -> Bool {
