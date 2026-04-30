@@ -195,7 +195,7 @@ struct FolderTile: Equatable {
         displayName: String,
         displayMode: FolderTileDisplayMode,
         contentViewMode: FolderTileContentViewMode = .grid,
-        sortMode: FolderTileSortMode = .dateModified
+        sortMode: FolderTileSortMode = .dateAdded
     ) {
         self.url = url
         self.displayName = displayName

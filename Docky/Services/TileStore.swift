@@ -1326,7 +1326,7 @@ final class TileStore: ObservableObject {
             return resolvedFolderSortMode(for: item)
         }
 
-        return systemFolderEntry(normalizedFolderURL: normalizedFolderURL)?.folder.sortMode ?? .dateModified
+        return systemFolderEntry(normalizedFolderURL: normalizedFolderURL)?.folder.sortMode ?? .dateAdded
     }
 
     private func updateFolderDisplayMode(at itemIndex: Int, mode: FolderTileDisplayMode) {
@@ -1428,7 +1428,7 @@ final class TileStore: ObservableObject {
             return mode
         }
 
-        return systemFolder(for: item)?.sortMode ?? .dateModified
+        return systemFolder(for: item)?.sortMode ?? .dateAdded
     }
 
     private func systemFolder(for item: TrailingTileItem) -> FolderTile? {

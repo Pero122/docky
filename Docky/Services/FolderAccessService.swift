@@ -54,10 +54,6 @@ final class FolderAccessService: ObservableObject {
         let entries = items.map(FolderSortEntry.init)
 
         return entries.sorted { lhs, rhs in
-            if lhs.isDirectory != rhs.isDirectory {
-                return lhs.isDirectory && !rhs.isDirectory
-            }
-
             switch sortMode {
             case .name:
                 let comparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
@@ -70,6 +66,39 @@ final class FolderAccessService: ObservableObject {
             case .dateModified:
                 if lhs.modificationDate != rhs.modificationDate {
                     return lhs.modificationDate > rhs.modificationDate
+                }
+                let comparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
+                if comparison != .orderedSame {
+                    return comparison == .orderedAscending
+                }
+            case .dateCreated:
+                if lhs.creationDate != rhs.creationDate {
+                    return lhs.creationDate > rhs.creationDate
+                }
+                let comparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
+                if comparison != .orderedSame {
+                    return comparison == .orderedAscending
+                }
+            case .dateAdded:
+                if lhs.addedDate != rhs.addedDate {
+                    return lhs.addedDate > rhs.addedDate
+                }
+                let comparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
+                if comparison != .orderedSame {
+                    return comparison == .orderedAscending
+                }
+            case .kind:
+                let kindComparison = lhs.kind.localizedStandardCompare(rhs.kind)
+                if kindComparison != .orderedSame {
+                    return kindComparison == .orderedAscending
+                }
+                let nameComparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
+                if nameComparison != .orderedSame {
+                    return nameComparison == .orderedAscending
+                }
+            case .size:
+                if lhs.size != rhs.size {
+                    return lhs.size > rhs.size
                 }
                 let comparison = lhs.displayName.localizedStandardCompare(rhs.displayName)
                 if comparison != .orderedSame {
@@ -155,7 +184,16 @@ final class FolderAccessService: ObservableObject {
             return .unreadable
         }
 
-        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        let keys: [URLResourceKey] = [
+            .addedToDirectoryDateKey,
+            .contentModificationDateKey,
+            .creationDateKey,
+            .fileSizeKey,
+            .isDirectoryKey,
+            .localizedNameKey,
+            .localizedTypeDescriptionKey,
+            .totalFileAllocatedSizeKey
+        ]
         guard let loaded = try? FileManager.default.contentsOfDirectory(
             at: normalizedFolderURL,
             includingPropertiesForKeys: keys,
@@ -195,13 +233,30 @@ private struct FolderSortEntry {
     let url: URL
     let displayName: String
     let modificationDate: Date
+    let creationDate: Date
+    let addedDate: Date
+    let kind: String
+    let size: Int
     let isDirectory: Bool
 
     nonisolated init(url: URL) {
-        let values = try? url.resourceValues(forKeys: [.localizedNameKey, .contentModificationDateKey, .isDirectoryKey])
+        let values = try? url.resourceValues(forKeys: [
+            .addedToDirectoryDateKey,
+            .contentModificationDateKey,
+            .creationDateKey,
+            .fileSizeKey,
+            .isDirectoryKey,
+            .localizedNameKey,
+            .localizedTypeDescriptionKey,
+            .totalFileAllocatedSizeKey
+        ])
         self.url = url
         self.displayName = values?.localizedName ?? url.lastPathComponent
         self.modificationDate = values?.contentModificationDate ?? .distantPast
+        self.creationDate = values?.creationDate ?? .distantPast
+        self.addedDate = values?.addedToDirectoryDate ?? .distantPast
+        self.kind = values?.localizedTypeDescription ?? ""
+        self.size = values?.fileSize ?? values?.totalFileAllocatedSize ?? 0
         self.isDirectory = values?.isDirectory == true
     }
 }

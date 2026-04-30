@@ -4,25 +4,32 @@
 //
 
 import AppKit
+import ObjectiveC
 import SwiftUI
 
 struct ContextAction: Identifiable {
     enum Kind: Equatable {
         case action
         case submenu
+        case lazySubmenu
+        case customView
         case divider
     }
 
     let id = UUID()
     let kind: Kind
     let title: String
+    let image: NSImage?
+    let customView: NSView?
     let isDestructive: Bool
     let isOn: Bool
     let children: [ContextAction]
+    let childrenProvider: (() -> [ContextAction])?
     let handler: () -> Void
 
     static func action(
         _ title: String,
+        image: NSImage? = nil,
         isDestructive: Bool = false,
         isOn: Bool = false,
         handler: @escaping () -> Void
@@ -30,9 +37,12 @@ struct ContextAction: Identifiable {
         Self(
             kind: .action,
             title: title,
+            image: image,
+            customView: nil,
             isDestructive: isDestructive,
             isOn: isOn,
             children: [],
+            childrenProvider: nil,
             handler: handler
         )
     }
@@ -41,15 +51,60 @@ struct ContextAction: Identifiable {
         Self(
             kind: .submenu,
             title: title,
+            image: nil,
+            customView: nil,
             isDestructive: false,
             isOn: false,
             children: children,
+            childrenProvider: nil,
+            handler: {}
+        )
+    }
+
+    static func lazySubmenu(
+        _ title: String,
+        image: NSImage? = nil,
+        childrenProvider: @escaping () -> [ContextAction]
+    ) -> Self {
+        Self(
+            kind: .lazySubmenu,
+            title: title,
+            image: image,
+            customView: nil,
+            isDestructive: false,
+            isOn: false,
+            children: [],
+            childrenProvider: childrenProvider,
+            handler: {}
+        )
+    }
+
+    static func customView(_ view: NSView) -> Self {
+        Self(
+            kind: .customView,
+            title: "",
+            image: nil,
+            customView: view,
+            isDestructive: false,
+            isOn: false,
+            children: [],
+            childrenProvider: nil,
             handler: {}
         )
     }
 
     static var divider: Self {
-        Self(kind: .divider, title: "", isDestructive: false, isOn: false, children: [], handler: {})
+        Self(
+            kind: .divider,
+            title: "",
+            image: nil,
+            customView: nil,
+            isDestructive: false,
+            isOn: false,
+            children: [],
+            childrenProvider: nil,
+            handler: {}
+        )
     }
 }
 
@@ -222,34 +277,86 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
         private func buildMenu(actions: [ContextAction]) -> NSMenu {
             let menu = NSMenu()
             for action in actions {
-                switch action.kind {
-                case .action:
-                    let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
-                    item.target = self
-                    item.representedObject = action
-                    item.state = action.isOn ? .on : .off
-                    if action.isDestructive {
-                        item.attributedTitle = NSAttributedString(
-                            string: action.title,
-                            attributes: [.foregroundColor: NSColor.systemRed]
-                        )
-                    }
-                    menu.addItem(item)
-                case .submenu:
-                    let item = NSMenuItem(title: action.title, action: nil, keyEquivalent: "")
-                    item.submenu = buildMenu(actions: action.children)
-                    menu.addItem(item)
-                case .divider:
-                    menu.addItem(.separator())
-                }
+                addMenuItem(for: action, to: menu)
             }
             return menu
+        }
+
+        private func addMenuItem(for action: ContextAction, to menu: NSMenu) {
+            switch action.kind {
+            case .action:
+                let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = action
+                item.state = action.isOn ? .on : .off
+                item.image = thumbnailImage(action.image)
+                if action.isDestructive {
+                    item.attributedTitle = NSAttributedString(
+                        string: action.title,
+                        attributes: [.foregroundColor: NSColor.systemRed]
+                    )
+                }
+                menu.addItem(item)
+            case .submenu:
+                let item = NSMenuItem(title: action.title, action: nil, keyEquivalent: "")
+                item.image = thumbnailImage(action.image)
+                item.submenu = buildMenu(actions: action.children)
+                menu.addItem(item)
+            case .lazySubmenu:
+                let item = NSMenuItem(title: action.title, action: nil, keyEquivalent: "")
+                item.image = thumbnailImage(action.image)
+                let submenu = NSMenu(title: action.title)
+                let provider = action.childrenProvider ?? { [] }
+                let controller = LazyMenuController(provider: provider) { [weak self] menu, children in
+                    guard let self else { return }
+                    menu.removeAllItems()
+                    for child in children {
+                        self.addMenuItem(for: child, to: menu)
+                    }
+                }
+                submenu.delegate = controller
+                objc_setAssociatedObject(submenu, &lazyMenuControllerKey, controller, .OBJC_ASSOCIATION_RETAIN)
+                item.submenu = submenu
+                menu.addItem(item)
+            case .customView:
+                let item = NSMenuItem()
+                item.view = action.customView
+                menu.addItem(item)
+            case .divider:
+                menu.addItem(.separator())
+            }
+        }
+
+        private func thumbnailImage(_ image: NSImage?) -> NSImage? {
+            guard let image else { return nil }
+            guard let copy = image.copy() as? NSImage else { return image }
+            copy.size = NSSize(width: 16, height: 16)
+            return copy
         }
 
         @objc private func runAction(_ sender: NSMenuItem) {
             guard let action = sender.representedObject as? ContextAction else { return }
             action.handler()
         }
+    }
+}
+
+private var lazyMenuControllerKey: UInt8 = 0
+
+private final class LazyMenuController: NSObject, NSMenuDelegate {
+    private let provider: () -> [ContextAction]
+    private let populate: (NSMenu, [ContextAction]) -> Void
+
+    init(
+        provider: @escaping () -> [ContextAction],
+        populate: @escaping (NSMenu, [ContextAction]) -> Void
+    ) {
+        self.provider = provider
+        self.populate = populate
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        populate(menu, provider())
     }
 }
 

@@ -188,7 +188,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
     }
 
     var effectiveFolderSortMode: FolderTileSortMode {
-        folderSortMode ?? .dateModified
+        folderSortMode ?? .dateAdded
     }
 
     nonisolated init(
@@ -223,7 +223,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
         sourceTileID: String,
         displayMode: FolderTileDisplayMode = .contents,
         contentViewMode: FolderTileContentViewMode = .grid,
-        sortMode: FolderTileSortMode = .dateModified
+        sortMode: FolderTileSortMode = .dateAdded
     ) -> Self {
         Self(
             id: "folder:\(sourceTileID)",
@@ -247,7 +247,7 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
         displayName: String,
         displayMode: FolderTileDisplayMode = .contents,
         contentViewMode: FolderTileContentViewMode = .grid,
-        sortMode: FolderTileSortMode = .dateModified
+        sortMode: FolderTileSortMode = .dateAdded
     ) -> Self {
         Self(
             id: id,
@@ -618,6 +618,10 @@ enum FolderTileContentViewMode: String, CaseIterable, Codable, Identifiable {
 enum FolderTileSortMode: String, CaseIterable, Codable, Identifiable {
     case name
     case dateModified
+    case dateCreated
+    case dateAdded
+    case kind
+    case size
 
     var id: String { rawValue }
 
@@ -625,6 +629,10 @@ enum FolderTileSortMode: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .name: "Name"
         case .dateModified: "Date Modified"
+        case .dateCreated: "Date Created"
+        case .dateAdded: "Date Added"
+        case .kind: "Kind"
+        case .size: "Size"
         }
     }
 }

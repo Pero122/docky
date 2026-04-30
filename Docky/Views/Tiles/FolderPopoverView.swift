@@ -165,14 +165,7 @@ struct FolderPopoverView: View {
             }
             .background {
                 ContextActionMenuPresenter { _ in
-                    [
-                        .action("Reveal in Finder") {
-                            revealInFinder(itemURL)
-                        },
-                        .action("Open in Finder") {
-                            openInFinder(itemURL)
-                        }
-                    ]
+                    contextActions(for: itemURL)
                 }
             }
         case .action(let action):
@@ -339,6 +332,26 @@ struct FolderPopoverView: View {
         if opened {
             isPresented = false
         }
+    }
+
+    private func contextActions(for itemURL: URL) -> [ContextAction] {
+        var actions: [ContextAction] = []
+        if isNavigableFolder(itemURL) {
+            actions.append(.action("Reveal in Finder", image: contextMenuSymbol("rectangle.stack.badge.plus")) {
+                revealInFinder(itemURL)
+            })
+            actions.append(.action("Open in Finder", image: contextMenuSymbol("folder")) {
+                openInFinder(itemURL)
+            })
+            return actions
+        }
+
+        actions = fileContextActions(for: itemURL)
+        actions.append(.divider)
+        actions.append(.action("Reveal in Finder", image: contextMenuSymbol("rectangle.stack.badge.plus")) {
+            revealInFinder(itemURL)
+        })
+        return actions
     }
 
     private func revealInFinder(_ itemURL: URL) {
@@ -733,7 +746,7 @@ private final class KeyMonitorView: NSView {
     }
 }
 
-private final class FolderQuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+final class FolderQuickLookController: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     static let shared = FolderQuickLookController()
 
     private var previewURL: URL?
