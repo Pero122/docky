@@ -17,6 +17,10 @@ final class WidgetHoverGrowService: ObservableObject {
 
     private init() {}
 
+    func isHovered(identifier: String) -> Bool {
+        hoveredExtents[identifier] != nil
+    }
+
     func setHovered(_ hovered: Bool, identifier: String, extent: WidgetExpansionExtent = .standard) {
         if hovered {
             hoveredExtents[identifier] = extent
