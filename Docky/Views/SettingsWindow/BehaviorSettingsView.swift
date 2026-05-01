@@ -165,6 +165,27 @@ struct BehaviorSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 4)
+                .disabled(!preferences.showsRunningApps)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show Running Apps", isOn: $preferences.showsRunningApps)
+                        .font(.headline)
+
+                    Text("When turned off, unpinned running apps are hidden from Docky so it acts as a static shelf alongside the system Dock.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Show Minimized Windows", isOn: $preferences.showsMinimizedWindows)
+                        .font(.headline)
+
+                    Text("When turned off, minimized window tiles do not appear in Docky's trailing section.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
             }
 
             Section("Widgets") {

@@ -34,9 +34,9 @@ struct DividerTileView: View {
             },
             .submenu("Position on Screen", children: positionActions),
             .divider,
-            .action("Smart Organize Pinned Items") {
-                TileStore.shared.smartOrganizePinnedItems()
-            },
+//            .action("Smart Organize Pinned Items") {
+//                TileStore.shared.smartOrganizePinnedItems()
+//            },
             .divider,
             .action("Edit Dock...") {
                 DockEditModeService.shared.enter()

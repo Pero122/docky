@@ -883,6 +883,22 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// Whether Docky surfaces unpinned running apps. Disable to use Docky as a static shelf alongside the system Dock.
+    @Published var showsRunningApps: Bool {
+        didSet {
+            guard showsRunningApps != oldValue else { return }
+            defaults.set(showsRunningApps, forKey: Keys.showsRunningApps)
+        }
+    }
+
+    /// Whether Docky surfaces minimized window tiles in the trailing section.
+    @Published var showsMinimizedWindows: Bool {
+        didSet {
+            guard showsMinimizedWindows != oldValue else { return }
+            defaults.set(showsMinimizedWindows, forKey: Keys.showsMinimizedWindows)
+        }
+    }
+
     /// Shape used for the active app indicator.
     @Published var activeIndicatorShape: DockTileIndicatorShape {
         didSet {
@@ -1197,6 +1213,8 @@ final class DockyPreferences: ObservableObject {
         static let widgetHoverPreviewSpans = "docky.widgetHoverPreviewSpans"
         static let widgetHoverPreviewDelay = "docky.widgetHoverGrowDelay"
         static let showsActivePinnedSeparator = "docky.showsActivePinnedSeparator"
+        static let showsRunningApps = "docky.showsRunningApps"
+        static let showsMinimizedWindows = "docky.showsMinimizedWindows"
         static let activeIndicatorShape = "docky.activeIndicatorShape"
         static let activeIndicatorImagePath = "docky.activeIndicatorImagePath"
         static let activeIndicatorColor = "docky.activeIndicatorColor"
@@ -1239,8 +1257,10 @@ final class DockyPreferences: ObservableObject {
         static let windowAxisSizing: DockWindowAxisSizing = .fitContent
         static let enablesWidgetHoverPreview = true
         static let widgetHoverPreviewSpans: Set<TileSpan> = Set(TileSpan.allCases)
-        static let widgetHoverPreviewDelay: TimeInterval = 0.5
+        static let widgetHoverPreviewDelay: TimeInterval = 1
         static let showsActivePinnedSeparator = true
+        static let showsRunningApps = true
+        static let showsMinimizedWindows = true
         static let activeIndicatorShape: DockTileIndicatorShape = .dot
         static let activeIndicatorImagePath: String? = nil
         static let activeIndicatorColor: DockColor? = nil
@@ -1286,6 +1306,8 @@ final class DockyPreferences: ObservableObject {
         let storedWidgetHoverPreviewSpans = defaults.array(forKey: Keys.widgetHoverPreviewSpans) as? [Int]
         let storedWidgetHoverPreviewDelay = defaults.object(forKey: Keys.widgetHoverPreviewDelay) as? Double
         let storedShowsActivePinnedSeparator = defaults.object(forKey: Keys.showsActivePinnedSeparator) as? Bool
+        let storedShowsRunningApps = defaults.object(forKey: Keys.showsRunningApps) as? Bool
+        let storedShowsMinimizedWindows = defaults.object(forKey: Keys.showsMinimizedWindows) as? Bool
         let storedActiveIndicatorShape = defaults.string(forKey: Keys.activeIndicatorShape)
         let storedActiveIndicatorImagePath = defaults.string(forKey: Keys.activeIndicatorImagePath)
         let storedActiveIndicatorColor = defaults.data(forKey: Keys.activeIndicatorColor)
@@ -1332,6 +1354,8 @@ final class DockyPreferences: ObservableObject {
             ?? DefaultValues.widgetHoverPreviewSpans
         self.widgetHoverPreviewDelay = max(storedWidgetHoverPreviewDelay ?? DefaultValues.widgetHoverPreviewDelay, 0)
         self.showsActivePinnedSeparator = storedShowsActivePinnedSeparator ?? DefaultValues.showsActivePinnedSeparator
+        self.showsRunningApps = storedShowsRunningApps ?? DefaultValues.showsRunningApps
+        self.showsMinimizedWindows = storedShowsMinimizedWindows ?? DefaultValues.showsMinimizedWindows
         self.activeIndicatorShape = (storedActiveIndicatorShape.flatMap(DockTileIndicatorShape.init(rawValue:)) ?? DefaultValues.activeIndicatorShape)
         self.activeIndicatorImagePath = storedActiveIndicatorImagePath ?? DefaultValues.activeIndicatorImagePath
         self.activeIndicatorColor = Self.decodeColor(from: storedActiveIndicatorColor) ?? DefaultValues.activeIndicatorColor
@@ -1401,6 +1425,8 @@ final class DockyPreferences: ObservableObject {
         widgetHoverPreviewSpans = DefaultValues.widgetHoverPreviewSpans
         widgetHoverPreviewDelay = DefaultValues.widgetHoverPreviewDelay
         showsActivePinnedSeparator = DefaultValues.showsActivePinnedSeparator
+        showsRunningApps = DefaultValues.showsRunningApps
+        showsMinimizedWindows = DefaultValues.showsMinimizedWindows
         activeIndicatorShape = DefaultValues.activeIndicatorShape
         activeIndicatorImagePath = DefaultValues.activeIndicatorImagePath
         activeIndicatorColor = DefaultValues.activeIndicatorColor

@@ -124,6 +124,20 @@ final class TileStore: ObservableObject {
                 self?.rebuildTiles()
             }
             .store(in: &cancellables)
+        preferences.$showsRunningApps
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.rebuildTiles()
+            }
+            .store(in: &cancellables)
+        preferences.$showsMinimizedWindows
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.rebuildTiles()
+            }
+            .store(in: &cancellables)
         mediaPlayback.$statesByBundleIdentifier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -2037,8 +2051,12 @@ final class TileStore: ObservableObject {
             pinnedBundleIDs: pinnedBundleIDs
         )
 
-        let runningTiles = displayedRunning.map(Self.tile(for:))
-        let minimizedWindowTiles = WorkspaceService.shared.minimizedWindows.map(Self.tile(for:))
+        let runningTiles = preferences.showsRunningApps
+            ? displayedRunning.map(Self.tile(for:))
+            : []
+        let minimizedWindowTiles = preferences.showsMinimizedWindows
+            ? WorkspaceService.shared.minimizedWindows.map(Self.tile(for:))
+            : []
         let mergedPinnedTiles = preferences.showsActivePinnedSeparator
             ? pinnedWithoutFinder
             : pinnedWithoutFinder + runningTiles
