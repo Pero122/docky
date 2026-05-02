@@ -174,20 +174,20 @@ struct RemindersWidgetTileView: View {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let minSide = min(width, height)
-        let contentPadding = min(max(minSide * 0.12, 6), minSide * 0.18)
-        let contentGap = min(max(minSide * 0.1, 6), minSide * 0.18)
-        let stackSpacing = min(max(minSide * 0.05, 3), minSide * 0.1)
+        let contentPadding = min(minSide * 0.12, minSide * 0.18)
+        let contentGap = min(minSide * 0.1, minSide * 0.18)
+        let stackSpacing = min(minSide * 0.05, minSide * 0.1)
 
         return LayoutMetrics(
             contentPadding: contentPadding,
             contentGap: contentGap,
             stackSpacing: stackSpacing,
-            accentWidth: min(max(minSide * 0.09, 6), 10),
-            captionFontSize: min(max(minSide * 0.1, 8), 11),
-            titleFontSize: min(max(minSide * 0.17, 11), renderedSpan == .one ? 14 : 16),
-            prominentFontSize: min(max(minSide * 0.27, 16), 26),
-            detailFontSize: min(max(minSide * 0.12, 9), 13),
-            emptyIconSize: min(max(minSide * 0.28, 18), 28)
+            accentWidth: min(minSide * 0.09, 10),
+            captionFontSize: min(minSide * 0.1, 11),
+            titleFontSize: min(minSide * 0.17, renderedSpan == .one ? 14 : 16),
+            prominentFontSize: min(minSide * 0.27, 26),
+            detailFontSize: min(minSide * 0.12, 13),
+            emptyIconSize: min(minSide * 0.28, 28)
         )
     }
 

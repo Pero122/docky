@@ -200,29 +200,29 @@ struct BatteriesWidgetTileView: View {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let minSide = min(width, height)
-        let contentPadding = min(max(minSide * 0.12, 6), minSide * 0.18)
-        let stackSpacing = min(max(minSide * 0.05, 3), minSide * 0.1)
-        let contentGap = min(max(minSide * 0.08, 6), minSide * 0.14)
-        let availableWidth = max(1, width - contentPadding * 2)
-        let availableHeight = max(1, height - contentPadding * 2)
-        let widthBasedCircle = (availableWidth - CGFloat(max(0, visibleDeviceCount - 1)) * contentGap) / CGFloat(visibleDeviceCount)
+        let contentPadding = min(minSide * 0.12, minSide * 0.18)
+        let stackSpacing = min(minSide * 0.05, minSide * 0.1)
+        let contentGap = min(minSide * 0.08, minSide * 0.14)
+        let availableWidth = max(0, width - contentPadding * 2)
+        let availableHeight = max(0, height - contentPadding * 2)
+        let widthBasedCircle = (availableWidth - CGFloat(max(0, visibleDeviceCount - 1)) * contentGap) / CGFloat(max(1, visibleDeviceCount))
         let maxCircleByHeight = availableHeight * (renderedSpan == .one ? 0.6 : 0.52)
-        let circleDiameter = max(30, min(widthBasedCircle, maxCircleByHeight))
+        let circleDiameter = max(0, min(widthBasedCircle, maxCircleByHeight))
 
         return LayoutMetrics(
             contentPadding: contentPadding,
             contentGap: contentGap,
             stackSpacing: stackSpacing,
-            captionFontSize: min(max(circleDiameter * 0.18, 8), 11),
-            titleFontSize: min(max(minSide * 0.17, 11), renderedSpan == .one ? 14 : 16),
-            detailFontSize: min(max(minSide * 0.12, 9), 13),
-            percentageFontSize: min(max(circleDiameter * 0.24, 10), renderedSpan == .three ? 12 : 14),
+            captionFontSize: min(circleDiameter * 0.18, 11),
+            titleFontSize: min(minSide * 0.17, renderedSpan == .one ? 14 : 16),
+            detailFontSize: min(minSide * 0.12, 13),
+            percentageFontSize: min(circleDiameter * 0.24, renderedSpan == .three ? 12 : 14),
             circleDiameter: circleDiameter,
-            ringWidth: min(max(circleDiameter * 0.1, 4), 7),
-            iconSize: min(max(circleDiameter * 0.28, 12), renderedSpan == .three ? 16 : 20),
-            boltSize: min(max(circleDiameter * 0.16, 7), 10),
-            chargeBadgeDiameter: min(max(circleDiameter * 0.24, 11), 16),
-            chargeBadgeOffset: min(max(circleDiameter * 0.05, 2), 4)
+            ringWidth: min(circleDiameter * 0.1, 7),
+            iconSize: min(circleDiameter * 0.28, renderedSpan == .three ? 16 : 20),
+            boltSize: min(circleDiameter * 0.16, 10),
+            chargeBadgeDiameter: min(circleDiameter * 0.24, 16),
+            chargeBadgeOffset: min(circleDiameter * 0.05, 4)
         )
     }
 

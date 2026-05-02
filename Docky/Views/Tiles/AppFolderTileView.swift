@@ -131,16 +131,20 @@ struct AppFolderTileView: View {
     }
 
     private func inlineExpandedPlaceholder(in size: CGSize) -> some View {
-        ZStack {
+        let minSide = min(size.width, size.height)
+        let chevronSize = min(minSide * 0.32, 20)
+        let inset = min(minSide * 0.1, 6)
+
+        return ZStack {
             preview(in: size)
                 .opacity(0.14)
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.primary.opacity(0.08))
-                .padding(6)
+                .padding(inset)
 
             Image(systemName: "chevron.left")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: chevronSize, weight: .semibold))
                 .foregroundStyle(.primary.opacity(0.9))
         }
     }

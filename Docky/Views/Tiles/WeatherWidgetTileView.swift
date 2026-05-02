@@ -350,18 +350,18 @@ struct WeatherWidgetTileView: View {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let minSide = min(width, height)
-        let contentPadding = min(max(minSide * 0.12, 6), minSide * 0.18)
-        let contentGap = min(max(minSide * 0.12, 6), minSide * 0.2)
-        let stackSpacing = min(max(minSide * 0.05, 3), minSide * 0.09)
+        let contentPadding = min(minSide * 0.12, minSide * 0.18)
+        let contentGap = min(minSide * 0.12, minSide * 0.2)
+        let stackSpacing = min(minSide * 0.05, minSide * 0.09)
 
         return LayoutMetrics(
             contentPadding: contentPadding,
             contentGap: contentGap,
             stackSpacing: stackSpacing,
-            symbolSize: min(max(minSide * 0.32, 18), 34),
-            temperatureFontSize: min(max(minSide * 0.24, 14), renderedSpan == .one ? 26 : 24),
-            secondaryFontSize: min(max(minSide * 0.13, 10), 13),
-            leadingColumnWidth: min(max(minSide * 0.36, 24), 42)
+            symbolSize: min(minSide * 0.32, 34),
+            temperatureFontSize: min(minSide * 0.24, renderedSpan == .one ? 26 : 24),
+            secondaryFontSize: min(minSide * 0.13, 13),
+            leadingColumnWidth: min(minSide * 0.36, 42)
         )
     }
 

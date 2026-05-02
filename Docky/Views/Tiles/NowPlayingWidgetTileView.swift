@@ -468,19 +468,19 @@ struct NowPlayingWidgetTileView: View {
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         let minSide = min(width, height)
-        let contentPadding = min(max(minSide * 0.12, 4), minSide * 0.18)
+        let contentPadding = min(minSide * 0.12, minSide * 0.18)
         let availableHeight = max(0, height - contentPadding * 2)
-        let contentGap = min(max(minSide * 0.1, 4), minSide * 0.2)
-        let stackSpacing = min(max(minSide * 0.05, 2), minSide * 0.1)
-        let controlClusterSpacing = min(max(minSide * 0.08, 4), minSide * 0.14)
-        let controlButtonSize = min(max(minSide * 0.24, 16), availableHeight)
+        let contentGap = min(minSide * 0.1, minSide * 0.2)
+        let stackSpacing = min(minSide * 0.05, minSide * 0.1)
+        let controlClusterSpacing = min(minSide * 0.08, minSide * 0.14)
+        let controlButtonSize = min(minSide * 0.24, availableHeight)
         let artworkWidthFraction: CGFloat = renderedSpan == .two ? 0.34 : 0.24
         let artworkSize = min(availableHeight, width * artworkWidthFraction)
         let artworkCornerRadius = min(artworkSize / 2, max(0, cornerRadius - contentPadding))
-        let titleFontSize = min(max(minSide * 0.18, 11), 16)
-        let subtitleFontSize = min(max(minSide * 0.14, 9), 13)
-        let controlIconSize = min(max(controlButtonSize * 0.72, 11), controlButtonSize)
-        let largeGlyphSize = min(max(minSide * 0.42, 18), minSide * 0.56)
+        let titleFontSize = min(minSide * 0.18, 16)
+        let subtitleFontSize = min(minSide * 0.14, 13)
+        let controlIconSize = min(controlButtonSize * 0.72, controlButtonSize)
+        let largeGlyphSize = min(minSide * 0.42, minSide * 0.56)
 
         return LayoutMetrics(
             contentPadding: contentPadding,
