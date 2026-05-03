@@ -106,4 +106,9 @@ final class AppUpdateService: ObservableObject {
     func checkForUpdates() {
         updater.checkForUpdates()
     }
+
+    func checkForUpdatesInBackground() {
+        guard automaticallyChecksForUpdates, canCheckForUpdates else { return }
+        updater.checkForUpdatesInBackground()
+    }
 }
