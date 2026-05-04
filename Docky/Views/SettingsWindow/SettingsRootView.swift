@@ -6,9 +6,18 @@
 import SwiftUI
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
-    case product
-    case appearance
-    case behavior
+    case docky
+    case appearanceIndicators
+    case appearanceTileLayout
+    case appearanceWindowShape
+    case appearanceWindowBackground
+    case behaviorPlacement
+    case behaviorVisibility
+    case behaviorAppTileClick
+    case behaviorWidgets
+    case behaviorLaunch
+    case behaviorSystemDock
+    case behaviorAppFolders
     case launchpad
     case windowManagement
     case appIcons
@@ -21,93 +30,98 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .product:
-            "Product"
-        case .appearance:
-            "Appearance"
-        case .behavior:
-            "Behavior"
-        case .launchpad:
-            "Launchpad"
-        case .windowManagement:
-            "Window Management"
-        case .appIcons:
-            "App Icons"
-        case .hiddenApps:
-            "Hidden Apps"
-        case .permissions:
-            "Permissions"
-        case .actions:
-            "Actions"
-        case .updates:
-            "Updates"
+        case .docky: "Docky"
+        case .appearanceIndicators: "Indicators"
+        case .appearanceTileLayout: "Tile Layout"
+        case .appearanceWindowShape: "Window Shape"
+        case .appearanceWindowBackground: "Window Background"
+        case .behaviorPlacement: "Placement"
+        case .behaviorVisibility: "Visibility"
+        case .behaviorAppTileClick: "App Tile Click"
+        case .behaviorWidgets: "Widgets"
+        case .behaviorLaunch: "Launch"
+        case .behaviorSystemDock: "System Dock"
+        case .behaviorAppFolders: "App Folders"
+        case .launchpad: "Launchpad"
+        case .windowManagement: "Window Management"
+        case .appIcons: "App Icons"
+        case .hiddenApps: "Hidden Apps"
+        case .permissions: "Permissions"
+        case .actions: "Actions"
+        case .updates: "Updates"
         }
     }
 
     var symbolName: String {
         switch self {
-        case .product:
-            "shippingbox"
-        case .appearance:
-            "paintbrush"
-        case .behavior:
-            "switch.2"
-        case .launchpad:
-            "square.grid.3x3.fill"
-        case .windowManagement:
-            "rectangle.on.rectangle"
-        case .appIcons:
-            "app.badge"
-        case .hiddenApps:
-            "eye.slash"
-        case .permissions:
-            "lock.shield"
-        case .actions:
-            "list.bullet.rectangle"
-        case .updates:
-            "arrow.trianglehead.clockwise"
+        case .docky: "shippingbox"
+        case .appearanceIndicators: "circle.bottomhalf.filled"
+        case .appearanceTileLayout: "square.grid.3x3"
+        case .appearanceWindowShape: "rectangle.dashed"
+        case .appearanceWindowBackground: "rectangle.fill"
+        case .behaviorPlacement: "arrow.up.and.down.and.arrow.left.and.right"
+        case .behaviorVisibility: "eye"
+        case .behaviorAppTileClick: "cursorarrow.click"
+        case .behaviorWidgets: "puzzlepiece.extension"
+        case .behaviorLaunch: "power"
+        case .behaviorSystemDock: "dock.rectangle"
+        case .behaviorAppFolders: "folder"
+        case .launchpad: "square.grid.3x3.fill"
+        case .windowManagement: "rectangle.on.rectangle"
+        case .appIcons: "app.badge"
+        case .hiddenApps: "eye.slash"
+        case .permissions: "lock.shield"
+        case .actions: "list.bullet.rectangle"
+        case .updates: "arrow.trianglehead.clockwise"
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .product:
-            "Register Docky Pro and review which features are gated."
-        case .appearance:
-            "Customize Docky’s look, chrome, and window tint."
-        case .behavior:
-            "Control placement, autohide, and system Dock behavior."
-        case .launchpad:
-            "Configure the Launchpad overlay grid and optional global shortcut."
-        case .windowManagement:
-            "Configure global window switching and shortcut behavior."
-        case .appIcons:
-            "Choose per-app icon overrides for pinned and running apps."
-        case .hiddenApps:
-            "Restore apps you previously hid from Docky's dock surface."
-        case .permissions:
-            "Review access status and request optional macOS permissions."
-        case .actions:
-            "Inspect loaded action packages and catalog diagnostics."
-        case .updates:
-            "Control Docky's automatic update checks and downloads."
-        }
-    }
-    
     var isPro: Bool {
         switch self {
         case .launchpad, .windowManagement, .appIcons, .actions:
             true
-        case .product, .appearance, .behavior, .hiddenApps, .permissions, .updates:
+        default:
             false
         }
     }
-
-    static var allCases: [SettingsPane] = [.product, .appearance, .behavior, .launchpad, .windowManagement, .appIcons, .hiddenApps, .permissions, .actions, .updates]
 }
 
+private struct SettingsSection: Identifiable {
+    let id: String
+    let title: String?
+    let panes: [SettingsPane]
+}
+
+private let settingsSections: [SettingsSection] = [
+    SettingsSection(id: "product", title: "Product", panes: [.docky]),
+    SettingsSection(id: "appearance", title: "Appearance", panes: [
+        .appearanceIndicators,
+        .appearanceTileLayout,
+        .appearanceWindowShape,
+        .appearanceWindowBackground
+    ]),
+    SettingsSection(id: "behavior", title: "Behavior", panes: [
+        .behaviorPlacement,
+        .behaviorVisibility,
+        .behaviorAppTileClick,
+        .behaviorWidgets,
+        .behaviorLaunch,
+        .behaviorSystemDock,
+        .behaviorAppFolders
+    ]),
+    SettingsSection(id: "tools", title: nil, panes: [
+        .launchpad,
+        .windowManagement,
+        .appIcons,
+        .hiddenApps,
+        .permissions,
+        .actions,
+        .updates
+    ])
+]
+
 struct SettingsRootView: View {
-    @State private var selection: SettingsPane = .product
+    @State private var selection: SettingsPane = .docky
 
     var body: some View {
         #if DEBUG
@@ -115,22 +129,39 @@ struct SettingsRootView: View {
         #endif
 
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $selection) { pane in
-                HStack(spacing: 10) {
-                    Label(pane.title, systemImage: pane.symbolName)
-                    Spacer(minLength: 8)
-                    if pane.isPro {
-                        ProBadge()
+            List(selection: $selection) {
+                ForEach(settingsSections) { section in
+                    if let title = section.title {
+                        Section(title) {
+                            paneRows(section.panes)
+                        }
+                    } else {
+                        Section {
+                            paneRows(section.panes)
+                        }
                     }
                 }
-                .tag(pane)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
             .listStyle(.sidebar)
         } detail: {
             SettingsDetailView(pane: selection)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func paneRows(_ panes: [SettingsPane]) -> some View {
+        ForEach(panes) { pane in
+            HStack(spacing: 10) {
+                Label(pane.title, systemImage: pane.symbolName)
+                Spacer(minLength: 8)
+                if pane.isPro {
+                    ProBadge()
+                }
+            }
+            .tag(pane)
+        }
     }
 }
 
@@ -148,12 +179,30 @@ private struct SettingsDetailView: View {
     @ViewBuilder
     private var selectedView: some View {
         switch pane {
-        case .product:
+        case .docky:
             ProductSettingsView()
-        case .appearance:
-            AppearanceSettingsView()
-        case .behavior:
-            BehaviorSettingsView()
+        case .appearanceIndicators:
+            AppearanceSettingsView(subsection: .indicators)
+        case .appearanceTileLayout:
+            AppearanceSettingsView(subsection: .tileLayout)
+        case .appearanceWindowShape:
+            AppearanceSettingsView(subsection: .windowShape)
+        case .appearanceWindowBackground:
+            AppearanceSettingsView(subsection: .windowBackground)
+        case .behaviorPlacement:
+            BehaviorSettingsView(subsection: .placement)
+        case .behaviorVisibility:
+            BehaviorSettingsView(subsection: .visibility)
+        case .behaviorAppTileClick:
+            BehaviorSettingsView(subsection: .appTileClick)
+        case .behaviorWidgets:
+            BehaviorSettingsView(subsection: .widgets)
+        case .behaviorLaunch:
+            BehaviorSettingsView(subsection: .launch)
+        case .behaviorSystemDock:
+            BehaviorSettingsView(subsection: .systemDock)
+        case .behaviorAppFolders:
+            BehaviorSettingsView(subsection: .appFolders)
         case .launchpad:
             LaunchpadSettingsView()
         case .windowManagement:

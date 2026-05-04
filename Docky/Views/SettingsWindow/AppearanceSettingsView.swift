@@ -8,321 +8,335 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct AppearanceSettingsView: View {
+    enum Subsection {
+        case indicators
+        case tileLayout
+        case windowShape
+        case windowBackground
+    }
+
+    let subsection: Subsection
+
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
 
     var body: some View {
         Form {
-            Section("Indicators") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Active Indicator Shape")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        Picker("Active Indicator Shape", selection: $preferences.activeIndicatorShape) {
-                            ForEach(DockTileIndicatorShape.allCases) { shape in
-                                Text(shape.title).tag(shape)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-
-                    if preferences.activeIndicatorShape == .image {
-                        HStack {
-                            Button("Choose Image...") {
-                                chooseActiveIndicatorImage()
-                            }
-
-                            if preferences.activeIndicatorImagePath != nil {
-                                Button("Clear") {
-                                    preferences.activeIndicatorImagePath = nil
-                                }
-                            }
-                        }
-
-                        if let selectedActiveIndicatorImageName {
-                            Text(selectedActiveIndicatorImageName)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if showsIndicatorColorControls {
-                        Divider()
-
-                        Toggle("Use Custom Indicator Color", isOn: usesCustomActiveIndicatorColorBinding)
-                            .font(.headline)
-
-                        if preferences.activeIndicatorColor != nil {
-                            ColorPicker("Indicator Color", selection: activeIndicatorColorBinding, supportsOpacity: false)
-                        }
-                    }
-
-                    Text("Choose whether running apps use no marker, the classic dot, a pill, or a custom image.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-            }
-
-            Section("Tile Layout") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Tile Clip Shape")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
-                            ForEach(DockClipShape.allCases) { shape in
-                                Text(shape.title).tag(shape)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-                    
-                    Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Tile Vertical Padding")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        HStack {
-                            Slider(value: $preferences.tileVerticalPadding, in: 8...32, step: 1) {
-                                Text("Tile Vertical Padding")
-                            }
-                            .labelsHidden()
-                            
-                            Text("\(Int(preferences.tileVerticalPadding)) pt")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
-
-                    Text("Controls the top and bottom inset inside each dock tile.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Tile Spacing")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        HStack {
-                            Slider(value: $preferences.tileSpacing, in: 0...16, step: 1) {
-                                Text("Tile Spacing")
-                            }
-                            .labelsHidden()
-                            Text("\(Int(preferences.tileSpacing)) pt")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
-
-                    Text("Controls the horizontal gap between adjacent dock tiles.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Tile Size")
-                        .font(.headline)
-
-                    HStack {
-                        Slider(value: systemDockTileSizeBinding, in: 16...128, step: 1) {
-                            Text("Tile Size")
-                        }
-                        .labelsHidden()
-
-                        Text("\(Int(dockSettings.tileSize.rounded())) pt")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
-                    }
-
-                    Text("Controls the base width and height of each dock tile.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Magnification", isOn: systemDockMagnificationBinding)
-                        .font(.headline)
-
-                    Text("Allows tiles to use the enlarged dock sizing behavior when enabled.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-//                VStack(alignment: .leading, spacing: 8) {
-//                    Text("Magnified Size")
-//                        .font(.headline)
-//
-//                    HStack {
-//                        Slider(value: systemDockLargeSizeBinding, in: Double(dockSettings.tileSize.rounded() + 1)...192, step: 1) {
-//                            Text("Magnified Size")
-//                        }
-//                        .labelsHidden()
-//
-//                        Text("\(Int(dockSettings.largeSize.rounded())) pt")
-//                            .foregroundStyle(.secondary)
-//                            .frame(width: 48, alignment: .trailing)
-//                    }
-//
-//                    Text("Sets Docky's larger icon size after the last system Dock sync, without writing back to the system Dock.")
-//                        .foregroundStyle(.secondary)
-//                        .fixedSize(horizontal: false, vertical: true)
-//                }
-//                .padding(.vertical, 4)
-//                .disabled(!dockSettings.magnification)
-            }
-
-            Section("Window Shape") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Chrome Clip Shape")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
-                            ForEach(DockClipShape.allCases) { shape in
-                                Text(shape.title).tag(shape)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-
-                    Text("Choose whether the dock chrome keeps the current rounded corners or uses a full circle or capsule clip.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Window Corner Radius")
-                            .font(.headline)
-                        
-                        Spacer()
-
-                        HStack {
-                            Slider(value: windowCornerRadiusBinding, in: 0...maximumCornerRadius, step: 1) {
-                                Text("Window Corner Radius")
-                            }
-                            .labelsHidden()
-                            Text("\(Int(min(preferences.windowCornerRadius, maximumCornerRadius))) pt")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
-
-                    Text(windowCornerRadiusDescription)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-                .disabled(preferences.windowClipShape == .circle)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Disable Glass Look", isOn: $preferences.disablesGlassLook)
-                        .font(.headline)
-
-                    Text("Removes the main window's glossy gradient border while keeping the existing blur and background tinting.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-            }
-
-            Section("Window Background") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Window Background Image")
-                        .font(.headline)
-
-                    HStack {
-                        Button("Choose Image...") {
-                            chooseWindowBackgroundImage()
-                        }
-
-                        if preferences.windowBackgroundImagePath != nil {
-                            Button("Clear") {
-                                preferences.windowBackgroundImagePath = nil
-                            }
-                        }
-                    }
-
-                    if let selectedWindowBackgroundImageName {
-                        Text(selectedWindowBackgroundImageName)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text("Use an image with aspect fill behind the dock tiles. When set, it replaces the material tint and opacity until cleared.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Use Custom Window Tint", isOn: usesCustomWindowTintBinding)
-                        .font(.headline)
-
-                    if preferences.windowTintColor != nil {
-                        ColorPicker("Window Tint", selection: windowTintBinding, supportsOpacity: false)
-                    }
-
-                    Text("Override the translucent tint behind the main dock window. Leave this off to keep following the system material color.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-                .disabled(usesWindowBackgroundImage)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Window Tint Opacity")
-                        .font(.headline)
-
-                    HStack {
-                        Slider(value: windowTintOpacityBinding, in: 0...1, step: 0.01) {
-                            Text("Window Tint Opacity")
-                        }
-                        Text("\(Int(preferences.effectiveWindowTintOpacity * 100))%")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
-                    }
-
-                    Text("Controls how strongly the tint color is laid over the window blur.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-                .disabled(usesWindowBackgroundImage)
-            }
-
-            Section {
-                Button("Reset to Defaults") {
-                    preferences.resetToDefaults()
-                }
+            switch subsection {
+            case .indicators:
+                indicatorsSection
+            case .tileLayout:
+                tileLayoutSection
+            case .windowShape:
+                windowShapeSection
+            case .windowBackground:
+                windowBackgroundSection
+                resetSection
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private var indicatorsSection: some View {
+        Section("Indicators") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Active Indicator Shape")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Picker("Active Indicator Shape", selection: $preferences.activeIndicatorShape) {
+                        ForEach(DockTileIndicatorShape.allCases) { shape in
+                            Text(shape.title).tag(shape)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+
+                if preferences.activeIndicatorShape == .image {
+                    HStack {
+                        Button("Choose Image...") {
+                            chooseActiveIndicatorImage()
+                        }
+
+                        if preferences.activeIndicatorImagePath != nil {
+                            Button("Clear") {
+                                preferences.activeIndicatorImagePath = nil
+                            }
+                        }
+                    }
+
+                    if let selectedActiveIndicatorImageName {
+                        Text(selectedActiveIndicatorImageName)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if showsIndicatorColorControls {
+                    Divider()
+
+                    Toggle("Use Custom Indicator Color", isOn: usesCustomActiveIndicatorColorBinding)
+                        .font(.headline)
+
+                    if preferences.activeIndicatorColor != nil {
+                        ColorPicker("Indicator Color", selection: activeIndicatorColorBinding, supportsOpacity: false)
+                    }
+                }
+
+                Text("Choose whether running apps use no marker, the classic dot, a pill, or a custom image.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var tileLayoutSection: some View {
+        Section("Tile Layout") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Tile Clip Shape")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
+                        ForEach(DockClipShape.allCases) { shape in
+                            Text(shape.title).tag(shape)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+
+                Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Tile Vertical Padding")
+                        .font(.headline)
+
+                    Spacer()
+
+                    HStack {
+                        Slider(value: $preferences.tileVerticalPadding, in: 8...32, step: 1) {
+                            Text("Tile Vertical Padding")
+                        }
+                        .labelsHidden()
+
+                        Text("\(Int(preferences.tileVerticalPadding)) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+
+                Text("Controls the top and bottom inset inside each dock tile.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Tile Spacing")
+                        .font(.headline)
+
+                    Spacer()
+
+                    HStack {
+                        Slider(value: $preferences.tileSpacing, in: 0...16, step: 1) {
+                            Text("Tile Spacing")
+                        }
+                        .labelsHidden()
+                        Text("\(Int(preferences.tileSpacing)) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+
+                Text("Controls the horizontal gap between adjacent dock tiles.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tile Size")
+                    .font(.headline)
+
+                HStack {
+                    Slider(value: systemDockTileSizeBinding, in: 16...128, step: 1) {
+                        Text("Tile Size")
+                    }
+                    .labelsHidden()
+
+                    Text("\(Int(dockSettings.tileSize.rounded())) pt")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
+                }
+
+                Text("Controls the base width and height of each dock tile.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Magnification", isOn: systemDockMagnificationBinding)
+                    .font(.headline)
+
+                Text("Allows tiles to use the enlarged dock sizing behavior when enabled.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var windowShapeSection: some View {
+        Section("Window Shape") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Chrome Clip Shape")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
+                        ForEach(DockClipShape.allCases) { shape in
+                            Text(shape.title).tag(shape)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+
+                Text("Choose whether the dock chrome keeps the current rounded corners or uses a full circle or capsule clip.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Window Corner Radius")
+                        .font(.headline)
+
+                    Spacer()
+
+                    HStack {
+                        Slider(value: windowCornerRadiusBinding, in: 0...maximumCornerRadius, step: 1) {
+                            Text("Window Corner Radius")
+                        }
+                        .labelsHidden()
+                        Text("\(Int(min(preferences.windowCornerRadius, maximumCornerRadius))) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+
+                Text(windowCornerRadiusDescription)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+            .disabled(preferences.windowClipShape == .circle)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Disable Glass Look", isOn: $preferences.disablesGlassLook)
+                    .font(.headline)
+
+                Text("Removes the main window's glossy gradient border while keeping the existing blur and background tinting.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var windowBackgroundSection: some View {
+        Section("Window Background") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Window Background Image")
+                    .font(.headline)
+
+                HStack {
+                    Button("Choose Image...") {
+                        chooseWindowBackgroundImage()
+                    }
+
+                    if preferences.windowBackgroundImagePath != nil {
+                        Button("Clear") {
+                            preferences.windowBackgroundImagePath = nil
+                        }
+                    }
+                }
+
+                if let selectedWindowBackgroundImageName {
+                    Text(selectedWindowBackgroundImageName)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Use an image with aspect fill behind the dock tiles. When set, it replaces the material tint and opacity until cleared.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use Custom Window Tint", isOn: usesCustomWindowTintBinding)
+                    .font(.headline)
+
+                if preferences.windowTintColor != nil {
+                    ColorPicker("Window Tint", selection: windowTintBinding, supportsOpacity: false)
+                }
+
+                Text("Override the translucent tint behind the main dock window. Leave this off to keep following the system material color.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+            .disabled(usesWindowBackgroundImage)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Window Tint Opacity")
+                    .font(.headline)
+
+                HStack {
+                    Slider(value: windowTintOpacityBinding, in: 0...1, step: 0.01) {
+                        Text("Window Tint Opacity")
+                    }
+                    Text("\(Int(preferences.effectiveWindowTintOpacity * 100))%")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
+                }
+
+                Text("Controls how strongly the tint color is laid over the window blur.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+            .disabled(usesWindowBackgroundImage)
+        }
+    }
+
+    @ViewBuilder
+    private var resetSection: some View {
+        Section {
+            Button("Reset to Defaults") {
+                preferences.resetToDefaults()
+            }
+        }
     }
 
     private var maximumCornerRadius: CGFloat {
@@ -342,13 +356,6 @@ struct AppearanceSettingsView: View {
             set: { dockSettings.setMagnification($0) }
         )
     }
-
-//    private var systemDockLargeSizeBinding: Binding<Double> {
-//        Binding(
-//            get: { Double(dockSettings.largeSize) },
-//            set: { dockSettings.setLargeSize(CGFloat($0)) }
-//        )
-//    }
 
     private var windowCornerRadiusBinding: Binding<CGFloat> {
         Binding(
