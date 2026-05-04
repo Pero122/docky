@@ -31,7 +31,6 @@ struct AppearanceSettingsView: View {
                 windowShapeSection
             case .windowBackground:
                 windowBackgroundSection
-                resetSection
             }
         }
         .formStyle(.grouped)
@@ -327,15 +326,6 @@ struct AppearanceSettingsView: View {
             }
             .padding(.vertical, 4)
             .disabled(usesWindowBackgroundImage)
-        }
-    }
-
-    @ViewBuilder
-    private var resetSection: some View {
-        Section {
-            Button("Reset to Defaults") {
-                preferences.resetToDefaults()
-            }
         }
     }
 

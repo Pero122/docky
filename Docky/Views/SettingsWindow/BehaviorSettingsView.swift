@@ -38,7 +38,6 @@ struct BehaviorSettingsView: View {
                 systemDockSection
             case .appFolders:
                 appFoldersSection
-                resetSection
             }
         }
         .formStyle(.grouped)
@@ -381,15 +380,6 @@ struct BehaviorSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
-        }
-    }
-
-    @ViewBuilder
-    private var resetSection: some View {
-        Section {
-            Button("Reset to Defaults") {
-                preferences.resetToDefaults()
-            }
         }
     }
 
