@@ -179,6 +179,16 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
                 guard let index = DockDragService.shared.destinationIndex else { return false }
                 return TileStore.shared.pinApp(bundleIdentifier: tile.bundleIdentifier, at: index)
             case .folder(let url, let tile):
+                if let targetTileID = DockDragService.shared.documentTargetTileID,
+                   let bundleIdentifier = TileStore.shared.tiles
+                    .first(where: { $0.id == targetTileID })
+                    .flatMap({ tile -> String? in
+                        if case .app(let app) = tile.content { return app.bundleIdentifier }
+                        return nil
+                    }) {
+                    WorkspaceService.shared.open(fileURLs: [url], withApplicationBundleIdentifier: bundleIdentifier)
+                    return true
+                }
                 guard let index = DockDragService.shared.destinationIndex else { return false }
                 TileStore.shared.insertTrailingItem(
                     .folder(url: url, displayName: tile.displayName),

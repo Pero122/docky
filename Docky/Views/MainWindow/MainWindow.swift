@@ -171,6 +171,9 @@ final class MainWindow: NSWindow {
             editMode.$paletteDrag.map { _ in () }.eraseToAnyPublisher(),
             editMode.$paletteDropDestination.map { _ in () }.eraseToAnyPublisher(),
             DockDragService.shared.$kind.map { _ in () }.eraseToAnyPublisher(),
+            DockDragService.shared.$documentTargetTileID.map { _ in () }.eraseToAnyPublisher(),
+            DockDragService.shared.$destinationIndex.map { _ in () }.eraseToAnyPublisher(),
+            DockDragService.shared.$destinationSection.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(layoutSignals)
             .receive(on: DispatchQueue.main)
@@ -392,8 +395,16 @@ final class MainWindow: NSWindow {
             return nil
         }()
         let externalFolderDropPreview: FolderTile? = {
-            if case let .folder(_, tile) = DockDragService.shared.kind { return tile }
-            return nil
+            // Only grow the chrome when there's an actual placement: cursor in the
+            // trailing drop region with a resolved insertion index. Open-with mode
+            // (over an app tile) and idle hovering both leave chrome unchanged.
+            guard DockDragService.shared.documentTargetTileID == nil,
+                  DockDragService.shared.destinationSection == .trailing,
+                  DockDragService.shared.destinationIndex != nil,
+                  case let .folder(_, tile) = DockDragService.shared.kind else {
+                return nil
+            }
+            return tile
         }()
         let sizingTiles = TileContainerView.previewedTiles(
             from: tileStore.tiles,

@@ -1270,6 +1270,14 @@ struct TileContainerView: View {
             if dockDrag.destinationIndex != index { dockDrag.destinationIndex = index }
             if dockDrag.destinationSection != .pinned { dockDrag.destinationSection = .pinned }
         case .folder:
+            // Hovering over an app tile → open-with target (any app, like document drops).
+            if let targetID = documentDropTargetTileID(at: location) {
+                if dockDrag.documentTargetTileID != targetID { dockDrag.documentTargetTileID = targetID }
+                if dockDrag.destinationIndex != nil { dockDrag.destinationIndex = nil }
+                if dockDrag.destinationSection != nil { dockDrag.destinationSection = nil }
+                return
+            }
+            if dockDrag.documentTargetTileID != nil { dockDrag.documentTargetTileID = nil }
             guard isPointInTrailingDropRegion(positionValue) else {
                 dockDrag.destinationIndex = nil
                 dockDrag.destinationSection = nil
