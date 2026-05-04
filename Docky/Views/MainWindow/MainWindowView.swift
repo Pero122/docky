@@ -122,6 +122,8 @@ struct MainWindowView: View {
 }
 
 final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    private var hiddenDragImageOriginals: [(NSDraggingItem, (() -> [NSDraggingImageComponent])?)] = []
+
     @MainActor required init(rootView: Content) {
         super.init(rootView: rootView)
         registerForDraggedTypes([.fileURL, .string])
@@ -141,10 +143,12 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
         let urls = readURLs(from: sender)
         if let kind = DockDragService.resolvePreview(from: urls) {
             DockDragService.shared.begin(kind: kind, at: location)
+            updateSystemDragImageVisibility(in: sender)
             return .copy
         }
         if DockEditModeService.shared.paletteDrag != nil {
             DockDragService.shared.cursorLocation = location
+            updateSystemDragImageVisibility(in: sender)
             return .copy
         }
         return []
@@ -154,10 +158,12 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
         let location = convert(sender.draggingLocation, from: nil)
         if DockDragService.shared.kind != nil {
             DockDragService.shared.updateCursor(location)
+            updateSystemDragImageVisibility(in: sender)
             return .copy
         }
         if DockEditModeService.shared.paletteDrag != nil {
             DockDragService.shared.cursorLocation = location
+            updateSystemDragImageVisibility(in: sender)
             return .copy
         }
         return []
@@ -169,9 +175,42 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
         // drag is still in flight outside the window, and the palette item can't be
         // recovered from the pasteboard (which only carries the variant ID).
         DockEditModeService.shared.paletteDropDestination = nil
+        restoreSystemDragImage()
+    }
+
+    /// Hide the system drag preview when our own insertion preview is active, so the
+    /// user sees one drop indication instead of two competing ones. Restore originals
+    /// when the active region is exited so the preview returns outside the dock.
+    private func updateSystemDragImageVisibility(in sender: any NSDraggingInfo) {
+        let shouldHide =
+            DockDragService.shared.documentTargetTileID != nil
+            || DockDragService.shared.destinationIndex != nil
+            || DockEditModeService.shared.paletteDropDestination != nil
+        if shouldHide {
+            guard hiddenDragImageOriginals.isEmpty else { return }
+            sender.enumerateDraggingItems(
+                options: [],
+                for: self,
+                classes: [NSPasteboardItem.self],
+                searchOptions: [:]
+            ) { item, _, _ in
+                self.hiddenDragImageOriginals.append((item, item.imageComponentsProvider))
+                item.imageComponentsProvider = { [] }
+            }
+        } else {
+            restoreSystemDragImage()
+        }
+    }
+
+    private func restoreSystemDragImage() {
+        for (item, originalProvider) in hiddenDragImageOriginals {
+            item.imageComponentsProvider = originalProvider
+        }
+        hiddenDragImageOriginals.removeAll()
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        defer { restoreSystemDragImage() }
         if let kind = DockDragService.shared.kind {
             defer { DockDragService.shared.clear() }
             switch kind {
