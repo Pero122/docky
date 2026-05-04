@@ -124,13 +124,8 @@ final class WindowSwitcherService: ObservableObject {
             return
         }
 
-        dismiss()
-
-        guard !usesInstantFocusPreview else {
-            return
-        }
-
         _ = WorkspaceService.shared.focus(window: selectedWindow)
+        dismiss()
     }
 
     func dismiss() {
@@ -157,13 +152,6 @@ final class WindowSwitcherService: ObservableObject {
         }
 
         selectedWindowIdentifier = identifier
-
-        if usesInstantFocusPreview {
-            cancelFocusedPreview()
-            focusSelectedWindowImmediately(identifier: identifier)
-            return
-        }
-
         scheduleFocusedPreview(forWindowIdentifier: identifier)
     }
 
@@ -396,26 +384,11 @@ final class WindowSwitcherService: ObservableObject {
             return
         }
 
-        if usesInstantFocusPreview {
-            cancelFocusedPreview()
-            focusSelectedWindowImmediately(identifier: selectedWindowIdentifier)
-            return
-        }
-
-        if usesInPlacePreview {
+        if activePreviewMode != nil {
             scheduleFocusedPreview(forWindowIdentifier: selectedWindowIdentifier)
         } else {
             cancelFocusedPreview()
         }
-    }
-
-    private func focusSelectedWindowImmediately(identifier: String) {
-        guard isPresented,
-              let window = windows.first(where: { $0.windowIdentifier == identifier }) else {
-            return
-        }
-
-        _ = WorkspaceService.shared.focus(window: window)
     }
 
     private func scheduleFocusedPreview(forWindowIdentifier identifier: String) {
@@ -424,22 +397,28 @@ final class WindowSwitcherService: ObservableObject {
 
         focusedPreview = nil
 
-        guard usesInPlacePreview,
+        guard activePreviewMode != nil,
               isPresented,
               !isContextMenuPresented,
               windows.contains(where: { $0.windowIdentifier == identifier }) else {
             return
         }
 
+        // In-place mode delays the preview so quick cycling doesn't churn
+        // expensive screen captures. Instant-focus is meant to be immediate.
+        let initialDelay: Duration = usesInstantFocusPreview ? .zero : .seconds(1)
+
         focusedPreviewTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
+            if initialDelay > .zero {
+                try? await Task.sleep(for: initialDelay)
+            }
 
             await self?.runFocusedPreviewLoop(forWindowIdentifier: identifier)
         }
     }
 
     private func runFocusedPreviewLoop(forWindowIdentifier identifier: String) async {
-        guard usesInPlacePreview,
+        guard activePreviewMode != nil,
               isPresented,
               !isContextMenuPresented,
               selectedWindowIdentifier == identifier,
@@ -469,7 +448,7 @@ final class WindowSwitcherService: ObservableObject {
         guard !startedLivePreview else { return }
 
         while !Task.isCancelled {
-            guard usesInPlacePreview,
+            guard activePreviewMode != nil,
                   isPresented,
                   !isContextMenuPresented,
                   selectedWindowIdentifier == identifier,
