@@ -220,9 +220,10 @@ private struct LaunchpadOverlayView: View {
     @State private var searchText = ""
     @State private var selectedEntryID: String?
     @State private var visiblePageID: String?
+    @State private var expandedFolder: AppFolderTile?
     @FocusState private var isSearchFocused: Bool
 
-    private let searchBarWidth: CGFloat = 420
+    private let searchBarWidth: CGFloat = 350
     private let searchBarTopInset: CGFloat = 56
     private let searchBarHeight: CGFloat = 56
     private let columnSpacing: CGFloat = 48
@@ -241,7 +242,7 @@ private struct LaunchpadOverlayView: View {
         #endif
 
         GeometryReader { proxy in
-            let topInset = searchBarTopInset + searchBarHeight + 64
+            let topInset = searchBarTopInset + searchBarHeight + 56
             let usableWidth = max(0, proxy.size.width - horizontalInset * 2)
             let usableHeight = max(0, proxy.size.height - topInset - bottomInset)
             let cellWidth = max(80, (usableWidth - columnSpacing * CGFloat(pageColumns - 1)) / CGFloat(pageColumns))
@@ -301,11 +302,35 @@ private struct LaunchpadOverlayView: View {
                     pageIndicator(pageCount: pages.count, currentIndex: currentPageIndex(in: pages))
                         .padding(.bottom, 24)
                 }
+
+                if let folder = expandedFolder {
+                    ExpandedFolderOverlay(
+                        folder: folder,
+                        sourceCellSize: CGSize(width: cellWidth, height: cellHeight),
+                        columnsPerPage: pageColumns,
+                        rowsPerPage: pageRows,
+                        onLaunch: { app in
+                            launch(app)
+                        },
+                        onDismiss: {
+                            dismissExpandedFolder()
+                        }
+                    )
+                    // Scale 1.3 → 1.0 with a fade gives the "falling on top"
+                    // feel the user asked for. Symmetric so dismiss reverses
+                    // it: scale 1.0 → 1.3 with a fade out.
+                    .transition(.scale(scale: 1.3).combined(with: .opacity))
+                    .zIndex(1)
+                }
             }
             .ignoresSafeArea()
             .environment(\.colorScheme, preferredColorScheme)
             .onExitCommand {
-                overlay.dismiss()
+                if expandedFolder != nil {
+                    dismissExpandedFolder()
+                } else {
+                    overlay.dismiss()
+                }
             }
             .background {
                 LaunchpadOverlayKeyMonitor { event in
@@ -368,8 +393,10 @@ private struct LaunchpadOverlayView: View {
                         for: entry,
                         cellSize: CGSize(width: cellWidth, height: cellHeight)
                     )
+                    .background(.red)
                     .frame(width: cellWidth, height: cellHeight)
                     .id(entry.id)
+                    .background(.blue)
                 }
             }
 
@@ -449,15 +476,20 @@ private struct LaunchpadOverlayView: View {
             }
             .buttonStyle(.plain)
         case .folder(let folder):
-            // Tap is intentionally a no-op for now — folder open/expand is a
-            // follow-up. Wrapped in a Button so keyboard nav still flows
-            // through it and hover focus styling stays consistent.
             Button {
-                // no-op
+                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+                    expandedFolder = folder
+                }
             } label: {
                 LaunchpadFolderCard(folder: folder, cellSize: cellSize)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func dismissExpandedFolder() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            expandedFolder = nil
         }
     }
 
@@ -537,13 +569,9 @@ private struct LaunchpadOverlayView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .glassEffect(.clear, in: .rect(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
-        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .glassEffect(.clear, in: .capsule)
     }
 
     private func handleKeyDown(_ event: NSEvent, columnCount: Int) -> Bool {
@@ -551,10 +579,18 @@ private struct LaunchpadOverlayView: View {
 
         switch event.keyCode {
         case 53:
-            overlay.dismiss()
+            // Esc closes the expanded folder first; only when nothing is
+            // expanded does it dismiss the launchpad as a whole.
+            if expandedFolder != nil {
+                dismissExpandedFolder()
+            } else {
+                overlay.dismiss()
+            }
             return true
         case 36, 76:
-            // Folders are skipped on Return for now (open is a follow-up).
+            // While a folder is expanded the user is interacting with the
+            // expanded card; let its own button taps drive launches.
+            guard expandedFolder == nil else { return false }
             guard case .app(let app) = selectedEntry else { return false }
             launch(app)
             return true
@@ -608,7 +644,7 @@ private struct LaunchpadAppCard: View {
     @ObservedObject private var preferences = DockyPreferences.shared
 
     var body: some View {
-        VStack(spacing: cellSize.height * 0.06) {
+        VStack(spacing: cellSpacing) {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
@@ -627,11 +663,18 @@ private struct LaunchpadAppCard: View {
         .contentShape(Rectangle())
     }
 
+    private var cellSpacing: CGFloat {
+        cellSize.height * 0.04
+    }
+
+    /// Sizes the icon so the card's `icon + spacing + label` stack fills
+    /// the cell vertically. With grid spacing at zero this leaves no
+    /// vertical gap between rows; horizontally the icon is also clamped to
+    /// `cellSize.width` so wide cells still shrink the icon to fit.
     private var iconSide: CGFloat {
-        // Icon takes ~70% of the smaller cell dimension; label and gap fill
-        // the rest. Capped at 160 so very wide screens don't blow icons up
-        // beyond their high-resolution source.
-        min(min(cellSize.width, cellSize.height) * 0.7, 160)
+        let labelHeight: CGFloat = 22
+        let availableForIcon = cellSize.height - labelHeight - cellSpacing
+        return max(40, min(cellSize.width, availableForIcon))
     }
 
     private var icon: NSImage {
@@ -657,7 +700,7 @@ private struct LaunchpadFolderCard: View {
     private static let gridDimension = 3
 
     var body: some View {
-        VStack(spacing: cellSize.height * 0.06) {
+        VStack(spacing: cellSpacing) {
             folderGrid
                 .frame(width: tileSide, height: tileSide)
 
@@ -671,6 +714,10 @@ private struct LaunchpadFolderCard: View {
         }
         .frame(width: cellSize.width, height: cellSize.height, alignment: .top)
         .contentShape(Rectangle())
+    }
+
+    private var cellSpacing: CGFloat {
+        cellSize.height * 0.04
     }
 
     private var folderGrid: some View {
@@ -718,8 +765,13 @@ private struct LaunchpadFolderCard: View {
         .frame(width: tileSide, height: tileSide)
     }
 
+    /// Same sizing math as `LaunchpadAppCard.iconSide` so a folder tile in
+    /// the launchpad grid is exactly as large as a regular app tile in
+    /// the same row.
     private var tileSide: CGFloat {
-        min(min(cellSize.width, cellSize.height) * 0.7, 160)
+        let labelHeight: CGFloat = 22
+        let availableForTile = cellSize.height - labelHeight - cellSpacing
+        return max(40, min(cellSize.width, availableForTile))
     }
 
     private func icon(forBundleIdentifier bundleIdentifier: String) -> NSImage {
@@ -728,6 +780,205 @@ private struct LaunchpadFolderCard: View {
             return overrideImage
         }
         return IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
+    }
+}
+
+/// Expanded folder card shown when the user opens a folder on the launchpad.
+/// Reuses the launchpad's grid+pagination idea inside a glass card. The
+/// outer ZStack catches taps for outside-of-card dismiss, so clicking the
+/// blurred backdrop closes the folder without dismissing the launchpad.
+private struct ExpandedFolderOverlay: View {
+    let folder: AppFolderTile
+    /// Cell size of the launchpad grid the user expanded from. Used to
+    /// derive the same `tileSide * 0.225` corner radius the folder icon
+    /// uses, so the rounding is visually continuous through the expand
+    /// animation.
+    let sourceCellSize: CGSize
+    /// Same column/row count as the underlying launchpad page so the
+    /// expanded folder reads as a 1:1 mini-launchpad. Cell size scales
+    /// down to fit because the card is only `(1 - 2 * edgePaddingFraction)`
+    /// of the screen.
+    let columnsPerPage: Int
+    let rowsPerPage: Int
+    let onLaunch: (AppTile) -> Void
+    let onDismiss: () -> Void
+
+    @State private var visiblePageID: String?
+
+    private let titleSpacing: CGFloat = 20
+    private let indicatorAreaHeight: CGFloat = 32
+    /// Tight gaps inside the card so icons can grow into the freed space.
+    /// Inset/spacing values are roughly a third of the launchpad's outer
+    /// grid; cells end up ~25% larger than the launchpad cells at the same
+    /// 10% horizontal padding.
+    private let cardHorizontalInset: CGFloat = 8
+    private let cardVerticalInset: CGFloat = 32
+    private let cardColumnSpacing: CGFloat = 8
+    private let cardRowSpacing: CGFloat = 8
+    /// 10% of the screen on each side so the card has breathing room
+    /// without crowding the icons.
+    private let horizontalPaddingFraction: CGFloat = 0.10
+
+    private var pageSize: Int { columnsPerPage * rowsPerPage }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let cardWidth = max(0, proxy.size.width - proxy.size.width * horizontalPaddingFraction * 2)
+            // Cells fill the card's horizontal space exactly: cell width is
+            // whatever's left after the inset and column gaps. Height
+            // follows the launchpad cell's aspect ratio so the label area
+            // stays proportional even when the cells are bigger or smaller
+            // than the launchpad's.
+            let availableForCells = max(0, cardWidth
+                - cardHorizontalInset * 2
+                - cardColumnSpacing * CGFloat(max(0, columnsPerPage - 1)))
+            let cellWidth = max(40, availableForCells / CGFloat(max(columnsPerPage, 1)))
+            let aspect = sourceCellSize.width > 0 ? sourceCellSize.height / sourceCellSize.width : 1
+            let cellHeight = max(40, cellWidth * aspect)
+            let cellSize = CGSize(width: cellWidth, height: cellHeight)
+            let pages = paginate(folder.apps, pageSize: pageSize)
+            // Hug content vertically: the card only reserves rows it
+            // actually uses. With a single short page the card stays
+            // tight; long folders fill all `rowsPerPage` and paginate.
+            let maxAppsOnAnyPage = pages.map(\.count).max() ?? 0
+            let usedRows = max(1, Int(ceil(Double(maxAppsOnAnyPage) / Double(max(columnsPerPage, 1)))))
+            let needsIndicator = pages.count > 1
+            let gridContentHeight = CGFloat(usedRows) * cellSize.height
+                + CGFloat(max(0, usedRows - 1)) * cardRowSpacing
+            let indicatorReservedHeight: CGFloat = needsIndicator ? indicatorAreaHeight : 0
+            let cardHeight = min(
+                proxy.size.height,
+                gridContentHeight + indicatorReservedHeight + cardVerticalInset * 2
+            )
+            let gridHeight = max(0, cardHeight - indicatorReservedHeight - cardVerticalInset * 2)
+            // Same formula as `LaunchpadFolderCard.tileSide` → cornerRadius
+            // is `tileSide * 0.225`, identical to the folder icon's.
+            let folderTileSide = min(min(sourceCellSize.width, sourceCellSize.height) * 0.7, 160)
+            let cornerRadius = folderTileSide * 0.225
+
+            ZStack {
+                // Full-size ultra-thin material backdrop blurs the
+                // launchpad behind the expanded folder so the card has
+                // visual breathing room. Doubles as the tap-to-dismiss
+                // target — buttons inside the card consume their own
+                // taps so launches still go through.
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onDismiss() }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                VStack(spacing: titleSpacing) {
+                    Text(folder.displayName)
+                        .font(.largeTitle.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+                        .frame(width: cardWidth)
+
+                    folderCard(
+                        width: cardWidth,
+                        height: cardHeight,
+                        cornerRadius: cornerRadius,
+                        cellSize: cellSize,
+                        gridHeight: gridHeight,
+                        pages: pages
+                    )
+                }
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
+            }
+        }
+    }
+
+    private func folderCard(
+        width: CGFloat,
+        height: CGFloat,
+        cornerRadius: CGFloat,
+        cellSize: CGSize,
+        gridHeight: CGFloat,
+        pages: [[AppTile]]
+    ) -> some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 0) {
+                    ForEach(pages.indices, id: \.self) { index in
+                        pageGrid(apps: pages[index], cellSize: cellSize, pageWidth: width)
+                            .id("folder-page-\(index)")
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $visiblePageID, anchor: .leading)
+            .scrollClipDisabled()
+            .frame(height: gridHeight)
+
+            // Only reserve indicator height when the folder actually
+            // paginates; otherwise it eats vertical space and pads the
+            // card past its content.
+            if pages.count > 1 {
+                pageIndicator(pageCount: pages.count)
+                    .frame(height: indicatorAreaHeight)
+            }
+        }
+        .padding(.vertical, cardVerticalInset)
+        .frame(width: width, height: height)
+        .background(Color.primary.opacity(0.2))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+        }
+    }
+
+    private func pageGrid(apps: [AppTile], cellSize: CGSize, pageWidth: CGFloat) -> some View {
+        let gridColumns = Array(
+            repeating: GridItem(.fixed(cellSize.width), spacing: cardColumnSpacing, alignment: .top),
+            count: columnsPerPage
+        )
+
+        return HStack(alignment: .top, spacing: 0) {
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: cardRowSpacing) {
+                ForEach(apps, id: \.bundleIdentifier) { app in
+                    Button {
+                        onLaunch(app)
+                    } label: {
+                        LaunchpadAppCard(app: app, cellSize: cellSize)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, cardHorizontalInset)
+        .frame(width: pageWidth, alignment: .topLeading)
+    }
+
+    private func paginate(_ apps: [AppTile], pageSize: Int) -> [[AppTile]] {
+        guard !apps.isEmpty, pageSize > 0 else { return [[]] }
+        return stride(from: 0, to: apps.count, by: pageSize).map { offset in
+            Array(apps[offset..<min(offset + pageSize, apps.count)])
+        }
+    }
+
+    @ViewBuilder
+    private func pageIndicator(pageCount: Int) -> some View {
+        if pageCount > 1 {
+            HStack(spacing: 8) {
+                ForEach(0..<pageCount, id: \.self) { index in
+                    Circle()
+                        .fill(.primary.opacity(index == currentPageIndex ? 0.85 : 0.3))
+                        .frame(width: 6, height: 6)
+                        .animation(.easeInOut(duration: 0.18), value: currentPageIndex)
+                }
+            }
+        }
+    }
+
+    private var currentPageIndex: Int {
+        guard let visiblePageID,
+              let parsed = Int(visiblePageID.dropFirst("folder-page-".count)) else { return 0 }
+        return max(parsed, 0)
     }
 }
 

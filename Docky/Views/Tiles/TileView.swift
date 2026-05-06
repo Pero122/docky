@@ -597,7 +597,7 @@ struct TileView: View {
             displayedContent
                 .background(appFolderDropTargetBackdrop)
                 .padding(contentPaddingEdges, contentPadding)
-                .animation(.easeInOut(duration: 0.18), value: showsAppFolderDropBackdrop)
+                .animation(.bouncy(duration: 0.4, extraBounce: 0.05), value: showsAppFolderDropBackdrop)
         }
     }
 
