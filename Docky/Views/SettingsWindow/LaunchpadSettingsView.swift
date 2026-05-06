@@ -79,7 +79,37 @@ struct LaunchpadSettingsView: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            Section("Appearance") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Transparency")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Text("\(Int(preferences.launchpadOverlayTransparency * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+
+                    Slider(value: launchpadTransparencyBinding, in: 0...1, step: 0.01)
+                        .disabled(!product.isUnlocked(.launchpad) || !preferences.enablesLaunchpadOverlay)
+
+                    Text("Adjusts how transparent the Launchpad backdrop is. Lower values darken the screen behind the grid; higher values let more of your desktop show through.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 4)
+            }
         }
         .formStyle(.grouped)
+    }
+
+    private var launchpadTransparencyBinding: Binding<CGFloat> {
+        Binding(
+            get: { preferences.launchpadOverlayTransparency },
+            set: { preferences.launchpadOverlayTransparency = min(max($0, 0), 1) }
+        )
     }
 }

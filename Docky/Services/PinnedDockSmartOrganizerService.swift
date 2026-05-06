@@ -358,9 +358,10 @@ final class PinnedDockSmartOrganizerService {
         availableWidgets: [AvailableWidget],
         existingItems: [PinnedTileItem]
     ) -> [PinnedTileItem] {
-        let appNamesByBundleIdentifier = Dictionary(uniqueKeysWithValues: apps.map {
-            ($0.bundleIdentifier, $0.displayName)
-        })
+        let appNamesByBundleIdentifier = DataIntegrityReporter.makeDictionary(
+            apps.map { ($0.bundleIdentifier, $0.displayName) },
+            site: "PinnedDockSmartOrganizerService.appNamesByBundleIdentifier"
+        )
         let availableBundleIdentifiers = Set(apps.map(\.bundleIdentifier))
         let availableWidgetsByKey = Dictionary(uniqueKeysWithValues: availableWidgets.map {
             (widgetKey(kind: $0.kind, ownerBundleIdentifier: $0.ownerBundleIdentifier), $0)

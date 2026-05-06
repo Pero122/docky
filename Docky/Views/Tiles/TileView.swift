@@ -15,6 +15,7 @@ struct TileView: View {
     let tile: Tile
     let isDragging: Bool
     let isDocumentDropTarget: Bool
+    let isAppFolderDropTarget: Bool
     @ObservedObject private var dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @ObservedObject private var preferences = DockyPreferences.shared
@@ -43,10 +44,16 @@ struct TileView: View {
     private static let finderBundleIdentifier = "com.apple.finder"
     private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
 
-    init(tile: Tile, isDragging: Bool = false, isDocumentDropTarget: Bool = false) {
+    init(
+        tile: Tile,
+        isDragging: Bool = false,
+        isDocumentDropTarget: Bool = false,
+        isAppFolderDropTarget: Bool = false
+    ) {
         self.tile = tile
         self.isDragging = isDragging
         self.isDocumentDropTarget = isDocumentDropTarget
+        self.isAppFolderDropTarget = isAppFolderDropTarget
         self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
         self._preferences = ObservedObject(wrappedValue: DockyPreferences.shared)
@@ -362,6 +369,10 @@ struct TileView: View {
         isAppContent && (tilePress.pressedTileID == tile.id || isDocumentDropTarget)
     }
 
+    private var showsAppFolderDropBackdrop: Bool {
+        isAppContent && isAppFolderDropTarget
+    }
+
     private var tileBodyOpacity: Double {
         if isLockedProductPlacement { return 0.38 }
         if appTileDimSignal { return 0.5 }
@@ -584,7 +595,9 @@ struct TileView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .app, .minimizedWindow, .spacer, .divider:
             displayedContent
+                .background(appFolderDropTargetBackdrop)
                 .padding(contentPaddingEdges, contentPadding)
+                .animation(.easeInOut(duration: 0.18), value: showsAppFolderDropBackdrop)
         }
     }
 
@@ -754,6 +767,30 @@ struct TileView: View {
             base: effectiveTileSize * 0.225,
             maximum: maximumCornerRadius
         )
+    }
+
+    /// Corner radius used when painting the app-folder-drop intent backdrop
+    /// behind a plain `.app` tile. Mirrors `AppFolderTileView.iconGrid`'s
+    /// container so the in-progress folder visually matches a finished one.
+    private var appFolderDropTargetCornerRadius: CGFloat {
+        let maximumCornerRadius = max(0, effectiveTileSize / 2)
+        return preferences.tileClipShape.resolvedCornerRadius(
+            base: effectiveTileSize * 0.225,
+            maximum: maximumCornerRadius
+        )
+    }
+
+    @ViewBuilder
+    private var appFolderDropTargetBackdrop: some View {
+        if isAppFolderDropTarget && isAppContent {
+            RoundedRectangle(
+                cornerRadius: appFolderDropTargetCornerRadius,
+                style: .continuous
+            )
+            .fill(Color.black.opacity(0.18))
+            .allowsHitTesting(false)
+            .transition(.scale)
+        }
     }
 
     private var position: ResolvedDockWindowPosition {

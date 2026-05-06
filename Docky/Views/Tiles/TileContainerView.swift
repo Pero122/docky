@@ -206,7 +206,11 @@ struct TileContainerView: View {
             position: position,
             compactWidgets: layout.compactsWidgetsForOverflow
         )
-        TileView(tile: tile, isDocumentDropTarget: dockDrag.documentTargetTileID == tile.id)
+        TileView(
+            tile: tile,
+            isDocumentDropTarget: dockDrag.documentTargetTileID == tile.id,
+            isAppFolderDropTarget: draggedAppFolderTargetTileID == tile.id
+        )
             .frame(width: size.width, height: size.height)
             .opacity(isHiddenForActiveDrag(tileID: tile.id) ? 0 : 1)
             .background(alignment: .topLeading) {

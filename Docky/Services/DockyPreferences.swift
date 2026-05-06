@@ -1132,6 +1132,28 @@ final class DockyPreferences: ObservableObject {
         }
     }
 
+    /// How transparent the Launchpad overlay's background tint is. `0` is
+    /// fully opaque (heavy tint over the SkyLight blur); `1` is fully clear
+    /// (only the live blur remains, no tint on top).
+    @Published var launchpadOverlayTransparency: CGFloat {
+        didSet {
+            let clampedValue = min(max(launchpadOverlayTransparency, 0), 1)
+            guard clampedValue != oldValue else {
+                if launchpadOverlayTransparency != clampedValue {
+                    launchpadOverlayTransparency = clampedValue
+                }
+                return
+            }
+
+            if launchpadOverlayTransparency != clampedValue {
+                launchpadOverlayTransparency = clampedValue
+                return
+            }
+
+            defaults.set(Double(clampedValue), forKey: Keys.launchpadOverlayTransparency)
+        }
+    }
+
     /// Preferred column count for the Launchpad overlay grid.
     @Published var launchpadGridColumnCount: Int {
         didSet {
@@ -1397,6 +1419,7 @@ final class DockyPreferences: ObservableObject {
         static let hiddenAppBundleIdentifiers = "docky.hiddenAppBundleIdentifiers"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
+        static let launchpadOverlayTransparency = "docky.launchpadOverlayTransparency"
         static let launchpadGridColumnCount = "docky.launchpadGridColumnCount"
         static let launchpadShortcut = "docky.launchpadShortcut"
         static let enablesWindowSwitcher = "docky.enablesWindowSwitcher"
@@ -1449,6 +1472,7 @@ final class DockyPreferences: ObservableObject {
         static let hiddenAppBundleIdentifiers: [String] = []
         static let showsGroupedOpenedAppsInDock = true
         static let enablesLaunchpadOverlay = true
+        static let launchpadOverlayTransparency: CGFloat = 0.4
         static let launchpadGridColumnCount = 7
         static let launchpadShortcut = KeyboardShortcut.empty
         static let enablesWindowSwitcher = true
@@ -1502,6 +1526,7 @@ final class DockyPreferences: ObservableObject {
         let storedHiddenAppBundleIdentifiers = defaults.stringArray(forKey: Keys.hiddenAppBundleIdentifiers)
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
+        let storedLaunchpadOverlayTransparency = defaults.object(forKey: Keys.launchpadOverlayTransparency) as? Double
         let storedLaunchpadGridColumnCount = defaults.object(forKey: Keys.launchpadGridColumnCount) as? Int
         let storedLaunchpadShortcut = defaults.data(forKey: Keys.launchpadShortcut)
         let storedEnablesWindowSwitcher = defaults.object(forKey: Keys.enablesWindowSwitcher) as? Bool
@@ -1558,6 +1583,10 @@ final class DockyPreferences: ObservableObject {
         self.hiddenAppBundleIdentifiers = Self.normalizedBundleIdentifiers(storedHiddenAppBundleIdentifiers ?? DefaultValues.hiddenAppBundleIdentifiers)
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
+        self.launchpadOverlayTransparency = min(max(
+            storedLaunchpadOverlayTransparency.map { CGFloat($0) } ?? DefaultValues.launchpadOverlayTransparency,
+            0
+        ), 1)
         self.launchpadGridColumnCount = max(storedLaunchpadGridColumnCount ?? DefaultValues.launchpadGridColumnCount, 1)
         self.launchpadShortcut = Self.decodeKeyboardShortcut(from: storedLaunchpadShortcut) ?? DefaultValues.launchpadShortcut
         self.enablesWindowSwitcher = storedEnablesWindowSwitcher ?? DefaultValues.enablesWindowSwitcher
@@ -1635,6 +1664,7 @@ final class DockyPreferences: ObservableObject {
         hiddenAppBundleIdentifiers = DefaultValues.hiddenAppBundleIdentifiers
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
+        launchpadOverlayTransparency = DefaultValues.launchpadOverlayTransparency
         launchpadGridColumnCount = DefaultValues.launchpadGridColumnCount
         launchpadShortcut = DefaultValues.launchpadShortcut
         enablesWindowSwitcher = DefaultValues.enablesWindowSwitcher

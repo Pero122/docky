@@ -148,9 +148,14 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
         currentTileID = nil
         currentBundleIdentifier = nil
         activeSourceTileID = nil
-        WindowPreviewService.shared.dismiss()
+
+        // Don't clear WindowPreviewService state yet — the SwiftUI body
+        // observes it, and emptying it synchronously would blank the popover
+        // content before the alpha animation has a chance to play. We clear
+        // it in the completion handler so the user sees a real fade-out.
 
         guard let window, window.isVisible else {
+            WindowPreviewService.shared.dismiss()
             close()
             return
         }
@@ -168,6 +173,7 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
             }
             if Task.isCancelled { return }
             guard self.currentTileID == nil else { return }
+            WindowPreviewService.shared.dismiss()
             self.close()
         }
     }

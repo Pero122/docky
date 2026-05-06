@@ -45,6 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         _ = AppUpdateService.shared
         _ = ProductService.shared
         _ = LaunchpadHotKeyService.shared
+        _ = LaunchpadOverlayService.shared
         AppUpdateService.shared.checkForUpdatesInBackground()
         WindowReservationService.shared.start()
 

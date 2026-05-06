@@ -669,7 +669,10 @@ final class WorkspaceService: ObservableObject {
         }
 
         let activeWindowIdentifiers = Set(windows.map(\.windowIdentifier))
-        let windowsByIdentifier = Dictionary(uniqueKeysWithValues: windows.map { ($0.windowIdentifier, $0) })
+        let windowsByIdentifier = DataIntegrityReporter.makeDictionary(
+            windows.map { ($0.windowIdentifier, $0) },
+            site: "WorkspaceService.refreshAppWindowPreviews.windowsByIdentifier"
+        )
         var updatedPreviews = appWindowPreviews
         var didChange = false
         let now = Date()
