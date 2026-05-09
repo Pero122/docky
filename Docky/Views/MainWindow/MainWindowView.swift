@@ -117,19 +117,7 @@ struct MainWindowView: View {
         }
     }
 
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.35),
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.05),
-                Color.white.opacity(0.12),
-                Color.white.opacity(0.28),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
+    private var borderGradient: LinearGradient { dockyGlassBorderGradient }
 
     private var effectiveCornerRadius: CGFloat {
         preferences.windowClipShape.resolvedCornerRadius(
@@ -215,10 +203,23 @@ struct LiquidGlassChromeView: NSViewRepresentable {
     }
 }
 
-final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
-    private var hiddenDragImageOriginals: [(NSDraggingItem, (() -> [NSDraggingImageComponent])?)] = []
+/// Snapshot of a system drag image we temporarily hid so our own preview
+/// can take over.
+private struct HiddenDragImageSnapshot {
+    let item: NSDraggingItem
+    let originalProvider: (() -> [NSDraggingImageComponent])?
+}
 
-    @MainActor required init(rootView: Content) {
+/// Concrete (non-generic) `NSHostingView` subclass for the dock chrome.
+/// Used to be `ClickThroughHostingView<Content: View>`, but the only call
+/// site instantiates it with `MainWindowView`, and the generic form
+/// triggered a Swift 6.x `EarlyPerfInliner` crash at `-O` while
+/// synthesizing the generic class's `deinit`. Concretizing the
+/// `NSHostingView` specialization avoids that path entirely.
+final class ClickThroughHostingView: NSHostingView<MainWindowView> {
+    private var hiddenDragImageOriginals: [HiddenDragImageSnapshot] = []
+
+    @MainActor required init(rootView: MainWindowView) {
         super.init(rootView: rootView)
         registerForDraggedTypes([.fileURL, .string])
     }
@@ -331,7 +332,9 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
                 classes: [NSPasteboardItem.self],
                 searchOptions: [:]
             ) { item, _, _ in
-                self.hiddenDragImageOriginals.append((item, item.imageComponentsProvider))
+                self.hiddenDragImageOriginals.append(
+                    HiddenDragImageSnapshot(item: item, originalProvider: item.imageComponentsProvider)
+                )
                 item.imageComponentsProvider = { [] }
             }
         } else {
@@ -340,8 +343,8 @@ final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
     }
 
     private func restoreSystemDragImage() {
-        for (item, originalProvider) in hiddenDragImageOriginals {
-            item.imageComponentsProvider = originalProvider
+        for snapshot in hiddenDragImageOriginals {
+            snapshot.item.imageComponentsProvider = snapshot.originalProvider
         }
         hiddenDragImageOriginals.removeAll()
     }

@@ -156,7 +156,6 @@ struct AppFolderTileView: View {
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.primary.opacity(0.08))
-                .padding(inset)
 
             Image(systemName: inlineExpandedChevronName)
                 .font(.system(size: chevronSize, weight: .semibold))
@@ -186,6 +185,7 @@ struct AppFolderTileView: View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(.white.opacity(0.1), lineWidth: 1)
                 }
+                .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .padding(.top, 1)
                 .padding(.bottom, 2)
 

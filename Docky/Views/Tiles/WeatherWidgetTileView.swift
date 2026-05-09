@@ -32,6 +32,7 @@ struct WeatherWidgetTileView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
+                .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                 if !isWithinStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

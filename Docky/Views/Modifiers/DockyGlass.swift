@@ -32,6 +32,51 @@ extension View {
     func dockyGlass(_ style: DockyGlassStyle = .regular) -> some View {
         modifier(DockyGlassModifier(style: style, shape: AnyShape(Capsule())))
     }
+
+    /// Adds the dock chrome's gradient stroke "glass" outline on top of
+    /// `self`, gated by the `disablesGlassLook` preference. When the user
+    /// turns glass off the modifier becomes a no-op so the surface falls
+    /// back to whatever else is already drawing borders.
+    @ViewBuilder
+    func dockyGlassBorder<S: InsettableShape>(in shape: S, lineWidth: CGFloat = 1) -> some View {
+        modifier(DockyGlassBorderModifier(shape: shape, lineWidth: lineWidth))
+    }
+}
+
+/// Shared with `MainWindowView.chromeBackground` so tile glass borders
+/// stay in lockstep with the dock chrome's gradient stroke.
+let dockyGlassBorderGradient = LinearGradient(
+    colors: [
+        Color.white.opacity(0.35),
+        Color.white.opacity(0.12),
+        Color.white.opacity(0.05),
+        Color.white.opacity(0.12),
+        Color.white.opacity(0.28),
+    ],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
+
+private struct DockyGlassBorderModifier<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let lineWidth: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        // Read `disablesGlassLook` directly instead of subscribing via
+        // `@ObservedObject DockyPreferences.shared`. The shared
+        // preferences object publishes dozens of unrelated properties
+        // (drag state, hover, etc.); subscribing here would invalidate
+        // every tile that uses this modifier on every preference write.
+        // Tile parents already observe `DockyPreferences` where they
+        // need to, so flips to `disablesGlassLook` still propagate via
+        // their existing dependency graph and re-evaluate this body.
+        content.overlay {
+            if !DockyPreferences.shared.disablesGlassLook {
+                shape.strokeBorder(dockyGlassBorderGradient, lineWidth: lineWidth)
+            }
+        }
+    }
 }
 
 private struct DockyGlassModifier: ViewModifier {

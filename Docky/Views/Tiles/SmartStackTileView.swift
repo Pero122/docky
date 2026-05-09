@@ -58,22 +58,38 @@ struct SmartStackTileView: View {
         } else {
             HStack(spacing: 8) {
                 GeometryReader { proxy in
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(tile.widgets.enumerated()), id: \.element.identifier) { index, widget in
+                    // Render only the currently-selected widget. Stacking
+                    // every widget eagerly (even inside `LazyVStack`,
+                    // which is only lazy inside a ScrollView) meant every
+                    // widget's body re-evaluated on every service publish
+                    // — Calendar's minute timer, MediaPlayback's now-
+                    // playing tick, etc. — even though only one was
+                    // visible. With `.id(widget.identifier)` SwiftUI
+                    // swaps the view on selection change and the
+                    // transition gives the same vertical-slide feel.
+                    ZStack {
+                        if let selectedWidget = selectedWidget {
                             WidgetTileView(
-                                tile: widget,
+                                tile: selectedWidget,
                                 cornerRadius: cornerRadius,
                                 renderedSpan: renderedSpan,
                                 isWithinStack: true
                             )
                             .frame(width: proxy.size.width, height: proxy.size.height)
+                            .id(selectedWidget.identifier)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .move(edge: .top).combined(with: .opacity)
+                                )
+                            )
                         }
                     }
-                    .offset(y: -CGFloat(selection) * proxy.size.height)
                     .animation(.easeInOut(duration: 0.2), value: selection)
                 }
                 .clipped()
                 .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
+                .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(alignment: .trailing) {
                     if tile.widgets.count > 1 {
                         VStack(spacing: 5) {
@@ -101,6 +117,16 @@ struct SmartStackTileView: View {
                 }
             }
         }
+    }
+
+    /// The widget currently in view. Falls back to the first widget if
+    /// `selection` is out of range (can happen briefly while the widgets
+    /// list is mutating).
+    private var selectedWidget: WidgetTile? {
+        if tile.widgets.indices.contains(selection) {
+            return tile.widgets[selection]
+        }
+        return tile.widgets.first
     }
 
     private var emptyState: some View {
@@ -193,8 +219,22 @@ private struct SmartStackScrollHostingView<Content: View>: NSViewRepresentable {
     }
 }
 
+/// Generic `NSHostingView<Content>` subclass — the genericity lets
+/// `NSHostingView`'s update path diff structurally against the previous
+/// `rootView` instead of re-hosting the whole subtree on every parent
+/// recompute (an `AnyView`-erased subclass triggers full rebuilds and
+/// makes the smart stack unresponsive when many parents publish).
+///
+/// The explicit empty `deinit` is the workaround for a Swift 6.x
+/// `EarlyPerfInliner` crash on the *synthesized* deinit of generic
+/// NSHostingView subclasses at `-O`: writing the deinit ourselves
+/// routes the optimizer through a different inlining path that
+/// doesn't recurse in `isCallerAndCalleeLayoutConstraintsCompatible`.
+/// Don't remove it without re-running an Archive build.
 private final class ScrollHostingView<Content: View>: NSHostingView<Content> {
     var scrollHandler: ((CGFloat, CGFloat) -> Bool)?
+
+    deinit { }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true

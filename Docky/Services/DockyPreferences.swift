@@ -116,7 +116,9 @@ struct PinnedTileItem: Codable, Equatable, Identifiable {
         )
     }
 
-    nonisolated static func smartStack(hiddenWidgetOwnerBundleIdentifiers: [String] = []) -> Self {
+    nonisolated static func smartStack(
+        hiddenWidgetOwnerBundleIdentifiers: [String] = WidgetCatalog.defaultHiddenSmartStackOwnerBundleIdentifiers
+    ) -> Self {
         Self(
             id: "custom:\(UUID().uuidString)",
             kind: .smartStack,
@@ -297,7 +299,9 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
         )
     }
 
-    nonisolated static func smartStack(hiddenWidgetOwnerBundleIdentifiers: [String] = []) -> Self {
+    nonisolated static func smartStack(
+        hiddenWidgetOwnerBundleIdentifiers: [String] = WidgetCatalog.defaultHiddenSmartStackOwnerBundleIdentifiers
+    ) -> Self {
         Self(
             id: "custom:\(UUID().uuidString)",
             kind: .smartStack,

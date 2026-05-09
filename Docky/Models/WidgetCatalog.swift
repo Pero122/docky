@@ -105,4 +105,24 @@ enum WidgetCatalog {
 
     static let paletteRegistrations: [WidgetRegistration] = staticRegistrations.filter(\.includesInPalette)
     static let smartStackRegistrations: [WidgetRegistration] = staticRegistrations.filter(\.includesInSmartStack)
+
+    /// Owner bundle identifiers that are *visible* in a freshly-inserted
+    /// smart stack by default. Anything in `smartStackRegistrations`
+    /// outside this set is hidden until the user toggles it on.
+    /// Now-Playing widgets are discovered dynamically and aren't part
+    /// of `smartStackRegistrations`, so they appear automatically as
+    /// soon as a supported media app starts playing.
+    static let defaultVisibleSmartStackOwnerBundleIdentifiers: Set<String> = [
+        WidgetOwnerBundleIdentifiers.calendar,
+        WidgetOwnerBundleIdentifiers.weather,
+    ]
+
+    /// Materialized "hidden" list — the inverse of
+    /// `defaultVisibleSmartStackOwnerBundleIdentifiers` — formatted as
+    /// the `hiddenWidgetOwnerBundleIdentifiers` argument the
+    /// persistence layer expects when creating a new smart stack item.
+    static let defaultHiddenSmartStackOwnerBundleIdentifiers: [String] =
+        smartStackRegistrations
+            .map(\.ownerBundleIdentifier)
+            .filter { !defaultVisibleSmartStackOwnerBundleIdentifiers.contains($0) }
 }
