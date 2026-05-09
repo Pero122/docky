@@ -50,6 +50,13 @@ struct MainWindowView: View {
     @ViewBuilder
     private func chromeBackground(cornerRadius: CGFloat) -> some View {
         backgroundFill(cornerRadius: cornerRadius)
+            .background {
+                if !preferences.disablesGlassLook,
+                   FeatureGate.shared.isAvailable(.liquidGlass),
+                   #available(macOS 26.0, *) {
+                    LiquidGlassChromeView(variant: 11, cornerRadius: cornerRadius)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 if !preferences.disablesGlassLook {
@@ -151,6 +158,60 @@ struct MainWindowView: View {
         }
 
         return NSImage(contentsOf: backgroundImageURL)
+    }
+}
+
+/// `NSGlassEffectView` SPI bridge — same surface
+/// `electron-liquid-glass` uses (Meridius-Labs/electron-liquid-glass).
+/// The class itself is private AppKit on macOS 26, so we load it by
+/// name; if the runtime can't find it (older OS that somehow reaches
+/// this code despite the availability gate, or a future rename), the
+/// view degrades to a plain `NSView` and renders nothing.
+///
+/// Variants are set via the private `set_variant:` selector taking a
+/// `long long`. There's no public Swift typed wrapper, so we look the
+/// IMP up by name and call it through a `@convention(c)` cast — same
+/// recipe Electron uses. Variant 11 is the configured chrome look.
+@available(macOS 26.0, *)
+struct LiquidGlassChromeView: NSViewRepresentable {
+    var variant: Int
+    var cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let view: NSView
+        if let cls = NSClassFromString("NSGlassEffectView") as? NSView.Type {
+            view = cls.init(frame: .zero)
+        } else {
+            view = NSView(frame: .zero)
+        }
+        view.wantsLayer = true
+        apply(to: view)
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        apply(to: view)
+    }
+
+    private func apply(to view: NSView) {
+        applyVariant(to: view)
+        view.layer?.cornerRadius = cornerRadius
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
+    }
+
+    private func applyVariant(to view: NSView) {
+        // Try the private `set_variant:` first (what NSGlassEffectView
+        // actually exposes), then a hypothetical public `setVariant:`.
+        for name in ["set_variant:", "setVariant:"] {
+            let sel = NSSelectorFromString(name)
+            guard view.responds(to: sel),
+                  let imp = view.method(for: sel) else { continue }
+            typealias VariantSetter = @convention(c) (NSObject, Selector, Int64) -> Void
+            let setter = unsafeBitCast(imp, to: VariantSetter.self)
+            setter(view, sel, Int64(variant))
+            return
+        }
     }
 }
 
