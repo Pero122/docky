@@ -73,7 +73,7 @@ struct SmartStackTileView: View {
                     .animation(.easeInOut(duration: 0.2), value: selection)
                 }
                 .clipped()
-                .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
                 .overlay(alignment: .trailing) {
                     if tile.widgets.count > 1 {
                         VStack(spacing: 5) {

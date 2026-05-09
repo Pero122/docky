@@ -180,7 +180,8 @@ struct AppFolderTileView: View {
 
         return ZStack {
             Color.clear
-                .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .background(.ultraThinMaterial)
+                .clipShape(.rect(cornerRadius: cornerRadius, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(.white.opacity(0.1), lineWidth: 1)

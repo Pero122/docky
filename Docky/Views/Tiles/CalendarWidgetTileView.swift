@@ -32,7 +32,6 @@ struct CalendarWidgetTileView: View {
 
                 ZStack {
                     Color(nsColor: backgroundTintColor)
-                    .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                     if !isWithinStack {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

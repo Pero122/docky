@@ -29,7 +29,6 @@ struct NowPlayingWidgetTileView: View {
 
             ZStack {
                 Color(nsColor: prominentTintColor)
-                    .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                 if !isWithinStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

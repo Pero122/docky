@@ -402,7 +402,7 @@ private struct WindowPreviewView: View {
             .frame(maxWidth: 720)
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .dockyGlass(in: RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
             .onChange(of: preview.selectedWindowIdentifier) { selection in
                 guard let selection else { return }
@@ -589,7 +589,7 @@ private struct WindowPreviewListView: View {
             .frame(maxHeight: CGFloat(maxVisibleRows) * rowHeight + 16)
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onChange(of: preview.selectedWindowIdentifier) { selection in
                 guard let selection else { return }

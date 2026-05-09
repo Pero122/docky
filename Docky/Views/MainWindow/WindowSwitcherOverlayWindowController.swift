@@ -306,7 +306,7 @@ private struct WindowSwitcherOverlayView: View {
             .frame(maxWidth: max(0, containerSize.width - 80))
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .dockyGlass(in: RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: containerCornerRadius, style: .continuous))
             .onChange(of: switcher.selectedWindowIdentifier) { selection in
                 guard let selection else { return }
@@ -377,7 +377,7 @@ private struct WindowSwitcherListView: View {
             .frame(maxHeight: CGFloat(maxVisibleRows) * rowHeight + 16)
             .fixedSize(horizontal: true, vertical: true)
             .background(.primary.opacity(0.18))
-            .dockyGlass(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onChange(of: switcher.selectedWindowIdentifier) { selection in
                 guard let selection else { return }
