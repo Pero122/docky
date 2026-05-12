@@ -30,6 +30,33 @@ final class IconCacheService {
         return image
     }
 
+    /// Synchronously returns the cached icon if present, without
+    /// triggering a LaunchServices fetch. Use this to render hot
+    /// icons inline and fall back to `loadIconAsync(forBundleIdentifier:)`
+    /// for cold entries so the main thread never blocks on disk I/O.
+    func cachedIcon(forBundleIdentifier bundleIdentifier: String) -> NSImage? {
+        let key = "bundle:\(bundleIdentifier)" as NSString
+        return cache.object(forKey: key)
+    }
+
+    /// Loads the icon on a background priority and stores the result
+    /// in the cache. NSWorkspace.icon is thread-safe and NSCache is
+    /// thread-safe, so the load can run anywhere.
+    func loadIconAsync(forBundleIdentifier bundleIdentifier: String) async -> NSImage {
+        let key = "bundle:\(bundleIdentifier)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+        return await Task.detached(priority: .userInitiated) { [cache] in
+            let image: NSImage
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+                image = NSWorkspace.shared.icon(forFile: url.path)
+            } else {
+                image = NSImage(systemSymbolName: "app.fill", accessibilityDescription: nil) ?? NSImage()
+            }
+            cache.setObject(image, forKey: key)
+            return image
+        }.value
+    }
+
     func icon(forFileURL url: URL) -> NSImage {
         let key = "path:\(url.path)" as NSString
         if let cached = cache.object(forKey: key) { return cached }

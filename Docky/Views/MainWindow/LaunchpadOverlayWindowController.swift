@@ -213,14 +213,49 @@ private final class LaunchpadOverlayWindow: NSWindow {
     }
 }
 
+/// Live state for an in-flight Launchpad drag. The display layer
+/// reorders entries based on `targetIndex` so siblings shift to make
+/// way as the cursor moves; the dragged tile renders both as a
+/// translucent placeholder in its preview slot and as a floating
+/// copy that follows the cursor.
+private struct LaunchpadDragState: Equatable {
+    let layoutItemID: String
+    let originIndex: Int
+    /// Insert position the dragged item would land at if dropped now.
+    var targetIndex: Int
+    /// Cursor location in the launchpad grid coordinate space.
+    var location: CGPoint
+    /// When non-nil the drag is hovering over a single cell long
+    /// enough to convert from a reorder into a folder merge.
+    var mergeTargetItemID: String?
+}
+
+/// Preference key that aggregates per-cell frames keyed by layout id.
+/// Used by the drag handler to map the cursor to an insertion index.
+private struct LaunchpadCellFramePreference: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 private struct LaunchpadOverlayView: View {
     @ObservedObject private var overlay = LaunchpadOverlayService.shared
     @Bindable private var preferences = DockyPreferences.shared
     @State private var searchText = ""
     @State private var selectedEntryID: String?
     @State private var visiblePageID: String?
-    @State private var expandedFolder: AppFolderTile?
+    @State private var expandedFolderID: String?
+    @State private var renamingFolderID: String?
+    @State private var renamingFolderDraft: String = ""
+    @State private var dragState: LaunchpadDragState?
+    @State private var cellFrames: [String: CGRect] = [:]
+    @State private var mergeDwellTask: Task<Void, Never>?
     @FocusState private var isSearchFocused: Bool
+    @FocusState private var isRenameFocused: Bool
+
+    private static let launchpadGridCoordinateSpace = "launchpadGrid"
+    private static let mergeDwellDuration: TimeInterval = 0.55
 
     private let searchBarWidth: CGFloat = 350
     private let searchBarTopInset: CGFloat = 56
@@ -296,7 +331,7 @@ private struct LaunchpadOverlayView: View {
                 ? max(scaledMinRowSpacing, extraVertical / CGFloat(pageRows - 1))
                 : scaledMinRowSpacing
             let pageSize = pageColumns * pageRows
-            let pages = paginate(filteredEntries, pageSize: pageSize)
+            let pages = paginate(displayedEntries, pageSize: pageSize)
 
             ZStack {
                 wallpaperBackground(in: proxy.size)
@@ -360,9 +395,16 @@ private struct LaunchpadOverlayView: View {
 
                 pageNavigationChevrons(pageCount: pages.count, currentIndex: currentPageIndex(in: pages))
 
+                if let renamingFolderID {
+                    folderRenameOverlay(folderID: renamingFolderID)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .zIndex(2)
+                }
+
                 if let folder = expandedFolder {
                     ExpandedFolderOverlay(
                         folder: folder,
+                        folderLayoutID: folderLayoutID(for: folder),
                         sourceCellSize: CGSize(width: cellWidth, height: cellHeight),
                         columnsPerPage: pageColumns,
                         rowsPerPage: pageRows,
@@ -379,6 +421,26 @@ private struct LaunchpadOverlayView: View {
                     .transition(.scale(scale: 1.3).combined(with: .opacity))
                     .zIndex(1)
                 }
+
+                // Floating copy of the dragged tile, anchored to the
+                // cursor. The grid below keeps a translucent ghost in
+                // the dragged item's preview slot, so siblings shift
+                // around it while this duplicate follows the pointer.
+                if let dragState,
+                   let entry = filteredEntries.first(where: { layoutItemID(for: $0) == dragState.layoutItemID }) {
+                    floatingDragPreview(for: entry, cellSize: CGSize(width: cellWidth, height: cellHeight))
+                        .position(dragState.location)
+                        .scaleEffect(1.08)
+                        .shadow(color: .black.opacity(0.35), radius: 22, y: 12)
+                        .opacity(0.95)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                        .zIndex(5)
+                }
+            }
+            .coordinateSpace(name: Self.launchpadGridCoordinateSpace)
+            .onPreferenceChange(LaunchpadCellFramePreference.self) { frames in
+                cellFrames = frames
             }
             .ignoresSafeArea()
             .environment(\.colorScheme, preferredColorScheme)
@@ -600,30 +662,394 @@ private struct LaunchpadOverlayView: View {
 
     @ViewBuilder
     private func entryCell(for entry: LaunchpadEntry, cellSize: CGSize) -> some View {
+        let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let layoutID = layoutItemID(for: entry)
+        let isDragging = dragState?.layoutItemID == layoutID
+        let isMergeTarget = dragState?.mergeTargetItemID == layoutID
+
+        Group {
+            switch entry {
+            case .app(let app):
+                Button {
+                    launch(app)
+                } label: {
+                    LaunchpadAppCard(app: app, cellSize: cellSize)
+                }
+                .buttonStyle(.plain)
+            case .folder(let folder):
+                Button {
+                    withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
+                        expandedFolderID = folderLayoutID(for: folder)
+                    }
+                } label: {
+                    LaunchpadFolderCard(folder: folder, cellSize: cellSize)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        // Translucent placeholder in the dragged item's slot while
+        // the floating copy follows the cursor.
+        .opacity(isDragging ? 0.18 : 1)
+        // Subtle scale-up on the merge target to signal "drop here to
+        // create / join a folder".
+        .scaleEffect(isMergeTarget ? 1.08 : 1)
+        .animation(.spring(duration: 0.22, bounce: 0.18), value: isMergeTarget)
+        // Record the cell's frame so the drag handler can convert
+        // cursor coords into an insertion index and detect which
+        // cell the cursor is over.
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: LaunchpadCellFramePreference.self,
+                    value: [layoutID: proxy.frame(in: .named(Self.launchpadGridCoordinateSpace))]
+                )
+            }
+        )
+        // simultaneousGesture so the Button's tap and our DragGesture
+        // can coexist — a quick click launches/opens, a sustained drag
+        // (>6pt) starts the reorder.
+        .simultaneousGesture(
+            DragGesture(
+                minimumDistance: 6,
+                coordinateSpace: .named(Self.launchpadGridCoordinateSpace)
+            )
+            .onChanged { value in
+                guard !isSearching else { return }
+                handleDragChange(layoutID: layoutID, value: value)
+            }
+            .onEnded { value in
+                guard !isSearching else { return }
+                handleDragEnd(layoutID: layoutID, value: value)
+            }
+        )
+        .contextMenu {
+            if case .folder(let folder) = entry, !isSearching {
+                folderContextMenu(for: folder)
+            }
+        }
+    }
+
+    private func layoutItemID(for entry: LaunchpadEntry) -> String {
+        switch entry {
+        case .app(let app): return "app:\(app.bundleIdentifier)"
+        case .folder(let folder): return "folder:\(folderLayoutID(for: folder))"
+        }
+    }
+
+    /// Strips the `virtual:` prefix injected by `resolveEntries` so we
+    /// get back the raw folder UUID stored in the layout.
+    private func folderLayoutID(for folder: AppFolderTile) -> String {
+        if folder.identifier.hasPrefix("virtual:") {
+            return String(folder.identifier.dropFirst("virtual:".count))
+        }
+        return folder.identifier
+    }
+
+    @ViewBuilder
+    private func floatingDragPreview(for entry: LaunchpadEntry, cellSize: CGSize) -> some View {
         switch entry {
         case .app(let app):
-            Button {
-                launch(app)
-            } label: {
-                LaunchpadAppCard(app: app, cellSize: cellSize)
-            }
-            .buttonStyle(.plain)
+            LaunchpadAppCard(app: app, cellSize: cellSize)
         case .folder(let folder):
-            Button {
-                withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                    expandedFolder = folder
-                }
-            } label: {
-                LaunchpadFolderCard(folder: folder, cellSize: cellSize)
-            }
-            .buttonStyle(.plain)
+            LaunchpadFolderCard(folder: folder, cellSize: cellSize)
         }
+    }
+
+    // MARK: - Live drag handling
+
+    /// Entries to render in the grid right now, with the dragged
+    /// item moved into its preview target slot so siblings shift to
+    /// make way during the drag.
+    private var displayedEntries: [LaunchpadEntry] {
+        guard let dragState else { return filteredEntries }
+        var entries = filteredEntries
+        guard let currentIndex = entries.firstIndex(where: { layoutItemID(for: $0) == dragState.layoutItemID }) else {
+            return entries
+        }
+        let item = entries.remove(at: currentIndex)
+        // After removing the dragged item, adjust the insertion index
+        // so a "move past myself to the right" doesn't double-skip.
+        let target = max(0, min(dragState.targetIndex, entries.count))
+        let adjusted = currentIndex < target ? target - 1 : target
+        let clamped = max(0, min(adjusted, entries.count))
+        entries.insert(item, at: clamped)
+        return entries
+    }
+
+    private func handleDragChange(layoutID: String, value: DragGesture.Value) {
+        // First call of the drag — capture the origin.
+        if dragState == nil {
+            guard let originIndex = filteredEntries.firstIndex(where: { layoutItemID(for: $0) == layoutID }) else { return }
+            dragState = LaunchpadDragState(
+                layoutItemID: layoutID,
+                originIndex: originIndex,
+                targetIndex: originIndex,
+                location: value.location,
+                mergeTargetItemID: nil
+            )
+        }
+
+        guard var state = dragState else { return }
+        state.location = value.location
+        let resolution = resolveDropTarget(at: value.location, draggedLayoutID: layoutID)
+        state.targetIndex = resolution.insertionIndex
+
+        // Merge dwell: if the cursor is centered over a candidate
+        // tile, schedule the cell to convert to a merge target after
+        // a short pause. Any sideways movement that re-resolves to a
+        // different cell cancels the dwell.
+        if let candidate = resolution.mergeCandidateID, candidate != layoutID {
+            if state.mergeTargetItemID != candidate {
+                state.mergeTargetItemID = nil
+                scheduleMergeDwell(for: candidate)
+            }
+        } else {
+            state.mergeTargetItemID = nil
+            cancelMergeDwell()
+        }
+
+        withAnimation(.spring(duration: 0.32, bounce: 0.18)) {
+            dragState = state
+        }
+    }
+
+    private func handleDragEnd(layoutID: String, value: DragGesture.Value) {
+        defer {
+            cancelMergeDwell()
+            withAnimation(.spring(duration: 0.28, bounce: 0.2)) {
+                dragState = nil
+            }
+        }
+        guard let state = dragState, state.layoutItemID == layoutID else { return }
+
+        let layoutService = LaunchpadLayoutService.shared
+
+        // Merge path wins when active.
+        if let mergeID = state.mergeTargetItemID {
+            performMerge(draggedLayoutID: layoutID, targetLayoutID: mergeID)
+            return
+        }
+
+        // Reorder path: place dragged at the previewed target index.
+        if state.targetIndex != state.originIndex {
+            layoutService.moveItem(id: layoutID, toIndex: state.targetIndex)
+        }
+    }
+
+    private struct DropResolution {
+        let insertionIndex: Int
+        let mergeCandidateID: String?
+    }
+
+    /// Maps a cursor location to an insertion index and (when the
+    /// cursor lies over a single cell's center) a merge candidate
+    /// id. The merge candidate is whichever tile the cursor is
+    /// directly over — the dwell timer decides whether the drop
+    /// becomes a folder merge.
+    private func resolveDropTarget(at location: CGPoint, draggedLayoutID: String) -> DropResolution {
+        let entries = filteredEntries
+        guard !entries.isEmpty else { return DropResolution(insertionIndex: 0, mergeCandidateID: nil) }
+
+        // Find which cell the cursor is over (excluding the dragged
+        // cell so it doesn't keep flagging itself as a merge candidate).
+        let frames = cellFrames
+        var directHit: (entryIndex: Int, frame: CGRect, id: String)?
+        var nearestHit: (entryIndex: Int, frame: CGRect, id: String, distance: CGFloat)?
+
+        for (entryIndex, entry) in entries.enumerated() {
+            let id = layoutItemID(for: entry)
+            guard id != draggedLayoutID, let frame = frames[id] else { continue }
+
+            if frame.contains(location) {
+                directHit = (entryIndex, frame, id)
+                break
+            }
+
+            let dx = location.x - frame.midX
+            let dy = location.y - frame.midY
+            let distance = sqrt(dx * dx + dy * dy)
+            if nearestHit == nil || distance < nearestHit!.distance {
+                nearestHit = (entryIndex, frame, id, distance)
+            }
+        }
+
+        let hit = directHit ?? nearestHit.map { (entryIndex: $0.entryIndex, frame: $0.frame, id: $0.id) }
+        guard let hit else { return DropResolution(insertionIndex: entries.count, mergeCandidateID: nil) }
+
+        // Center-half of the cell width => merge candidate.
+        let centerBand = hit.frame.insetBy(dx: hit.frame.width * 0.25, dy: 0)
+        let mergeID = (directHit != nil && centerBand.minX...centerBand.maxX ~= location.x) ? hit.id : nil
+
+        // Insertion index: before this cell if cursor left of midX,
+        // after otherwise. The caller adjusts for the dragged item's
+        // own position when rendering the preview.
+        let insertion = location.x < hit.frame.midX ? hit.entryIndex : hit.entryIndex + 1
+        return DropResolution(insertionIndex: insertion, mergeCandidateID: mergeID)
+    }
+
+    private func scheduleMergeDwell(for candidateID: String) {
+        cancelMergeDwell()
+        let dwell = Self.mergeDwellDuration
+        mergeDwellTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(dwell * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            // The drag may have re-resolved away from this candidate
+            // before the dwell expired — only commit if it's still the
+            // candidate the user is hovering on.
+            guard var state = dragState else { return }
+            // We require the drag's last resolution to still match
+            // the candidate; the gesture closure refreshes state on
+            // every move, so checking the most recent target is enough.
+            let resolution = resolveDropTarget(at: state.location, draggedLayoutID: state.layoutItemID)
+            guard resolution.mergeCandidateID == candidateID else { return }
+            state.mergeTargetItemID = candidateID
+            withAnimation(.spring(duration: 0.25, bounce: 0.22)) {
+                dragState = state
+            }
+        }
+    }
+
+    private func cancelMergeDwell() {
+        mergeDwellTask?.cancel()
+        mergeDwellTask = nil
+    }
+
+    private func performMerge(draggedLayoutID: String, targetLayoutID: String) {
+        let layoutService = LaunchpadLayoutService.shared
+        guard let draggedEntry = filteredEntries.first(where: { layoutItemID(for: $0) == draggedLayoutID }),
+              case .app(let draggedApp) = draggedEntry else {
+            return // Folders aren't merge sources.
+        }
+        guard let targetEntry = filteredEntries.first(where: { layoutItemID(for: $0) == targetLayoutID }) else { return }
+
+        switch targetEntry {
+        case .app(let targetApp):
+            guard draggedApp.bundleIdentifier != targetApp.bundleIdentifier else { return }
+            createFolder(merging: draggedApp.bundleIdentifier, withTarget: targetApp)
+        case .folder(let targetFolder):
+            layoutService.addApp(
+                bundleID: draggedApp.bundleIdentifier,
+                toFolderWithID: folderLayoutID(for: targetFolder)
+            )
+        }
+    }
+
+    private func createFolder(merging draggedBundleID: String, withTarget targetApp: AppTile) {
+        let layoutService = LaunchpadLayoutService.shared
+        let seedName = appFolderSeedName(for: appsForBundleIDs([targetApp.bundleIdentifier, draggedBundleID]))
+        guard let folderID = layoutService.createFolder(
+            merging: draggedBundleID,
+            intoSlotOf: targetApp.bundleIdentifier,
+            name: seedName
+        ) else { return }
+        // Hand off to AI naming on macOS 26+; fall back to seed name
+        // (which the layout already holds).
+        suggestFolderName(folderID: folderID, bundleIDs: [targetApp.bundleIdentifier, draggedBundleID])
+    }
+
+    private func appsForBundleIDs(_ bundleIDs: [String]) -> [AppTile] {
+        var byID: [String: AppTile] = [:]
+        for entry in overlay.entries {
+            switch entry {
+            case .app(let app): byID[app.bundleIdentifier] = app
+            case .folder(let folder):
+                for app in folder.apps { byID[app.bundleIdentifier] = app }
+            }
+        }
+        return bundleIDs.compactMap { byID[$0] }
+    }
+
+    private func suggestFolderName(folderID: String, bundleIDs: [String]) {
+        let apps = appsForBundleIDs(bundleIDs)
+        guard apps.count >= 2 else { return }
+
+        if #available(macOS 26.0, *) {
+            Task { @MainActor in
+                guard let suggestion = await AppFolderNamingService.shared.suggestInitialName(for: apps),
+                      !suggestion.isEmpty else { return }
+                LaunchpadLayoutService.shared.renameFolder(id: folderID, to: suggestion)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func folderContextMenu(for folder: AppFolderTile) -> some View {
+        let folderID = folderLayoutID(for: folder)
+        Button("Rename…") {
+            renamingFolderID = folderID
+            renamingFolderDraft = folder.displayName
+            isRenameFocused = true
+        }
+        Button("Ungroup", role: .destructive) {
+            LaunchpadLayoutService.shared.ungroupFolder(id: folderID)
+        }
+    }
+
+    @ViewBuilder
+    private func folderRenameOverlay(folderID: String) -> some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { dismissRename(save: false) }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Rename Folder")
+                    .font(.title3.weight(.semibold))
+                TextField("Name", text: $renamingFolderDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 17))
+                    .focused($isRenameFocused)
+                    .onSubmit { dismissRename(save: true) }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { dismissRename(save: false) }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") { dismissRename(save: true) }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(renamingFolderDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .padding(20)
+            .frame(width: 340)
+            .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.08))
+            }
+        }
+    }
+
+    private func dismissRename(save: Bool) {
+        if save, let renamingFolderID {
+            LaunchpadLayoutService.shared.renameFolder(id: renamingFolderID, to: renamingFolderDraft)
+        }
+        renamingFolderID = nil
+        renamingFolderDraft = ""
+        isRenameFocused = false
+        isSearchFocused = true
     }
 
     private func dismissExpandedFolder() {
         withAnimation(.easeInOut(duration: 0.22)) {
-            expandedFolder = nil
+            expandedFolderID = nil
         }
+    }
+
+    /// Derives the currently-expanded folder from the live entries so
+    /// drag/drop mutations (pop out, add) reflect in the expanded view
+    /// without a stale snapshot. The folder auto-dismisses when its
+    /// member count drops below two (the layout collapses singletons
+    /// back to plain apps).
+    private var expandedFolder: AppFolderTile? {
+        guard let expandedFolderID else { return nil }
+        for entry in overlay.entries {
+            if case .folder(let folder) = entry,
+               folderLayoutID(for: folder) == expandedFolderID {
+                return folder
+            }
+        }
+        return nil
     }
 
     private var filteredEntries: [LaunchpadEntry] {
@@ -708,7 +1134,11 @@ private struct LaunchpadOverlayView: View {
     }
 
     private func handleKeyDown(_ event: NSEvent, columnCount: Int) -> Bool {
-        guard event.type == .keyDown else { return false }
+        // The overlay's hosting view stays alive for the app's lifetime, so this
+        // local monitor keeps firing while the overlay is hidden. Without the
+        // guard, Enter while Docky is frontmost for any other reason (NSAlert,
+        // settings, permissions, Cmd-Tab back) launches the first launchpad app.
+        guard overlay.isPresented, event.type == .keyDown else { return false }
 
         switch event.keyCode {
         case 53:
@@ -778,12 +1208,12 @@ private struct LaunchpadAppCard: View {
 
     var body: some View {
         VStack(spacing: cellSpacing) {
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: iconSide, height: iconSide)
-                .padding(overridePadding)
+            AsyncAppIcon(
+                bundleIdentifier: app.bundleIdentifier,
+                overrideURL: preferences.effectiveAppIconOverrideURL(forBundleIdentifier: app.bundleIdentifier),
+                side: iconSide,
+                padding: overridePadding
+            )
 
             Text(app.displayName)
                 .font(.body)
@@ -815,14 +1245,58 @@ private struct LaunchpadAppCard: View {
         }
         return preferences.appIconOverridePadding(forBundleIdentifier: app.bundleIdentifier) * iconSide
     }
+}
 
-    private var icon: NSImage {
-        if let overrideURL = preferences.effectiveAppIconOverrideURL(forBundleIdentifier: app.bundleIdentifier),
-           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
-            return overrideImage
+/// Renders an app icon without blocking the main thread on the first
+/// LaunchServices hit. Cached icons render synchronously (a normal
+/// `Image(nsImage:)`); cold icons show a neutral placeholder while a
+/// detached task warms the cache, then swap in with a short fade.
+private struct AsyncAppIcon: View {
+    let bundleIdentifier: String
+    let overrideURL: URL?
+    let side: CGFloat
+    let padding: CGFloat
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: side, height: side)
+                    .padding(padding)
+            } else {
+                RoundedRectangle(cornerRadius: side * 0.22, style: .continuous)
+                    .fill(.primary.opacity(0.06))
+                    .frame(width: side, height: side)
+                    .padding(padding)
+            }
         }
+        .task(id: cacheKey) {
+            await loadIcon()
+        }
+        .animation(.easeOut(duration: 0.12), value: image)
+    }
 
-        return IconCacheService.shared.icon(forBundleIdentifier: app.bundleIdentifier)
+    private var cacheKey: String {
+        "\(bundleIdentifier)|\(overrideURL?.path ?? "")"
+    }
+
+    private func loadIcon() async {
+        if let overrideURL,
+           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+            image = overrideImage
+            return
+        }
+        if let cached = IconCacheService.shared.cachedIcon(forBundleIdentifier: bundleIdentifier) {
+            image = cached
+            return
+        }
+        let loaded = await IconCacheService.shared.loadIconAsync(forBundleIdentifier: bundleIdentifier)
+        image = loaded
     }
 }
 
@@ -890,12 +1364,12 @@ private struct LaunchpadFolderCard: View {
             // macOS Launchpad folder preview look.
             LazyVGrid(columns: columns, alignment: .leading, spacing: gap) {
                 ForEach(displayedApps, id: \.bundleIdentifier) { app in
-                    Image(nsImage: icon(forBundleIdentifier: app.bundleIdentifier))
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: cellSide, height: cellSide)
-                        .padding(overrideIconPadding(for: app.bundleIdentifier, side: cellSide))
+                    AsyncAppIcon(
+                        bundleIdentifier: app.bundleIdentifier,
+                        overrideURL: preferences.effectiveAppIconOverrideURL(forBundleIdentifier: app.bundleIdentifier),
+                        side: cellSide,
+                        padding: overrideIconPadding(for: app.bundleIdentifier, side: cellSide)
+                    )
                 }
             }
             .padding(innerPadding)
@@ -931,6 +1405,10 @@ private struct LaunchpadFolderCard: View {
 /// blurred backdrop closes the folder without dismissing the launchpad.
 private struct ExpandedFolderOverlay: View {
     let folder: AppFolderTile
+    /// Layout-level folder ID (the raw UUID without the `virtual:`
+    /// prefix). Used to tag drag payloads originating from inside
+    /// this folder so the launchpad backdrop can pop them out.
+    let folderLayoutID: String
     /// Cell size of the launchpad grid the user expanded from. Used to
     /// derive the same `tileSide * 0.225` corner radius the folder icon
     /// uses, so the rounding is visually continuous through the expand
@@ -1087,6 +1565,11 @@ private struct ExpandedFolderOverlay: View {
                         LaunchpadAppCard(app: app, cellSize: cellSize)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Remove from Folder", role: .destructive) {
+                            LaunchpadLayoutService.shared.removeFromFolder(bundleID: app.bundleIdentifier)
+                        }
+                    }
                 }
             }
             .fixedSize(horizontal: true, vertical: false)

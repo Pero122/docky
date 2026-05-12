@@ -40,6 +40,56 @@ enum LaunchpadEntry: Identifiable {
     }
 }
 
+/// Snapshot of the filesystem scan, consumed by the layout pipeline
+/// to seed the initial layout and reconcile installs/removals.
+struct LaunchpadScan {
+    struct SeedGroup {
+        let name: String
+        let bundleIDs: [String]
+    }
+
+    let appsByBundleID: [String: AppTile]
+    /// `.app` bundles that sat directly under an applications root
+    /// (not inside a subdirectory). Used for initial seed only.
+    let topLevelApps: [AppTile]
+    /// Subdirectories under an applications root that contained at
+    /// least one app, in scan order. Each becomes a virtual folder
+    /// in the first-launch seed.
+    let fsGroups: [SeedGroup]
+
+    /// Initial layout items, alpha-sorted by display name. Top-level
+    /// `.app` entries and FS folder groups are interleaved so the
+    /// user lands on something close to what they had before.
+    func seedLayoutItems() -> [LaunchpadLayoutItem] {
+        struct Sortable {
+            let name: String
+            let item: LaunchpadLayoutItem
+        }
+        var sortables: [Sortable] = []
+        sortables.reserveCapacity(topLevelApps.count + fsGroups.count)
+
+        for app in topLevelApps {
+            sortables.append(Sortable(
+                name: app.displayName,
+                item: .app(bundleID: app.bundleIdentifier)
+            ))
+        }
+        for group in fsGroups {
+            sortables.append(Sortable(
+                name: group.name,
+                item: .folder(LaunchpadFolder(
+                    id: UUID().uuidString,
+                    name: group.name,
+                    bundleIDs: group.bundleIDs
+                ))
+            ))
+        }
+
+        sortables.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return sortables.map(\.item)
+    }
+}
+
 final class LaunchpadOverlayService: ObservableObject {
     static let shared = LaunchpadOverlayService()
 
@@ -91,7 +141,10 @@ final class LaunchpadOverlayService: ObservableObject {
         }
 
         if entries.isEmpty {
-            entries = Self.scanApplications()
+            // Run a synchronous scan so the overlay has something to
+            // render on first present; async rescans then keep it
+            // fresh as the user installs / uninstalls apps.
+            applyScan(Self.scanApplications())
         }
         isPresented = true
     }
@@ -204,34 +257,93 @@ final class LaunchpadOverlayService: ObservableObject {
     }
 
     private func performRescan() {
-        let scanned = Self.scanApplications()
-        for entry in scanned {
-            switch entry {
-            case .app(let app):
-                _ = IconCacheService.shared.icon(forBundleIdentifier: app.bundleIdentifier)
-            case .folder(let folder):
-                for app in folder.apps {
-                    _ = IconCacheService.shared.icon(forBundleIdentifier: app.bundleIdentifier)
-                }
-            }
+        let scan = Self.scanApplications()
+        // Warm icon cache off the main thread (the icon service is
+        // thread-safe; the actual NSImage materializes on first read).
+        for app in scan.appsByBundleID.values {
+            _ = IconCacheService.shared.icon(forBundleIdentifier: app.bundleIdentifier)
         }
         DispatchQueue.main.async { [weak self] in
-            self?.entries = scanned
+            self?.applyScan(scan)
         }
     }
 
-    /// Walk each application root one level deep. A `.app` bundle becomes a
-    /// top-level `.app` entry; any other directory becomes a `.folder`
-    /// entry whose members are the `.app` bundles found anywhere inside it
-    /// (recursively, but `.skipsPackageDescendants` prevents descent into
-    /// nested .app packages). Empty subfolders are dropped, and duplicates
-    /// across roots are de-duplicated by bundle id (the first occurrence
-    /// wins, so /Applications takes precedence over /System/Applications
-    /// for any rare overlap).
-    private static func scanApplications() -> [LaunchpadEntry] {
+    @MainActor
+    private func applyScan(_ scan: LaunchpadScan) {
+        let layoutService = LaunchpadLayoutService.shared
+
+        // First launch: import the alpha-sorted FS structure (apps +
+        // FS-folder-derived virtual folders) into the user-editable
+        // layout. From then on the layout drives ordering.
+        if layoutService.layout.items.isEmpty {
+            let seed = scan.seedLayoutItems()
+            layoutService.seedIfEmpty(seed)
+        }
+
+        let installed = Set(scan.appsByBundleID.keys)
+        layoutService.pruneMissingApps(installedBundleIDs: installed)
+        layoutService.appendNewApps(scan.appsByBundleID.keys.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        })
+
+        entries = Self.resolveEntries(
+            layout: layoutService.layout,
+            appsByBundleID: scan.appsByBundleID
+        )
+    }
+
+    /// Resolves the persisted layout against the live filesystem
+    /// scan into the renderable entry list. Folders with zero or one
+    /// resolvable apps degrade gracefully.
+    private static func resolveEntries(
+        layout: LaunchpadLayout,
+        appsByBundleID: [String: AppTile]
+    ) -> [LaunchpadEntry] {
+        var entries: [LaunchpadEntry] = []
+        entries.reserveCapacity(layout.items.count)
+
+        for item in layout.items {
+            switch item {
+            case .app(let bundleID):
+                if let app = appsByBundleID[bundleID] {
+                    entries.append(.app(app))
+                }
+            case .folder(let folder):
+                let resolved = folder.bundleIDs.compactMap { appsByBundleID[$0] }
+                guard !resolved.isEmpty else { continue }
+                // A folder with one surviving app renders as a plain
+                // app card; the layout service collapses these
+                // permanently on the next prune, but we render the
+                // current state correctly either way.
+                if resolved.count == 1 {
+                    entries.append(.app(resolved[0]))
+                } else {
+                    let folderTile = AppFolderTile(
+                        identifier: "virtual:\(folder.id)",
+                        displayName: folder.name,
+                        apps: resolved,
+                        displayMode: .grid,
+                        contentViewMode: .grid
+                    )
+                    entries.append(.folder(folderTile))
+                }
+            }
+        }
+
+        return entries
+    }
+
+    /// Walk each application root one level deep. A `.app` bundle
+    /// becomes a top-level app; any subdirectory containing apps
+    /// becomes a named group that the layout service consumes as a
+    /// seed for virtual folders. Duplicates across roots are
+    /// deduped by bundle id (first occurrence wins; `/Applications`
+    /// takes precedence over `/System/Applications`).
+    private static func scanApplications() -> LaunchpadScan {
         var seenBundleIDs = Set<String>()
-        var apps: [AppTile] = []
-        var folders: [AppFolderTile] = []
+        var appsByBundleID: [String: AppTile] = [:]
+        var topLevelApps: [AppTile] = []
+        var fsGroups: [LaunchpadScan.SeedGroup] = []
 
         for directory in applicationDirectories {
             guard let topLevel = try? FileManager.default.contentsOfDirectory(
@@ -244,7 +356,8 @@ final class LaunchpadOverlayService: ObservableObject {
                 if url.pathExtension == "app" {
                     if let appTile = makeAppTile(from: url),
                        seenBundleIDs.insert(appTile.bundleIdentifier).inserted {
-                        apps.append(appTile)
+                        appsByBundleID[appTile.bundleIdentifier] = appTile
+                        topLevelApps.append(appTile)
                     }
                     continue
                 }
@@ -255,24 +368,22 @@ final class LaunchpadOverlayService: ObservableObject {
                 let nestedApps = scanSubfolderApps(in: url, seenBundleIDs: &seenBundleIDs)
                 guard !nestedApps.isEmpty else { continue }
 
-                let displayName = FileManager.default.displayName(atPath: url.path)
-                folders.append(AppFolderTile(
-                    identifier: "fs:\(url.standardizedFileURL.path)",
-                    displayName: displayName,
-                    apps: nestedApps,
-                    displayMode: .grid,
-                    contentViewMode: .grid
+                for app in nestedApps {
+                    appsByBundleID[app.bundleIdentifier] = app
+                }
+
+                fsGroups.append(LaunchpadScan.SeedGroup(
+                    name: FileManager.default.displayName(atPath: url.path),
+                    bundleIDs: nestedApps.map(\.bundleIdentifier)
                 ))
             }
         }
 
-        var merged: [LaunchpadEntry] = []
-        merged.append(contentsOf: apps.map(LaunchpadEntry.app))
-        merged.append(contentsOf: folders.map(LaunchpadEntry.folder))
-        merged.sort { lhs, rhs in
-            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
-        }
-        return merged
+        return LaunchpadScan(
+            appsByBundleID: appsByBundleID,
+            topLevelApps: topLevelApps,
+            fsGroups: fsGroups
+        )
     }
 
     private static func scanSubfolderApps(in folderURL: URL, seenBundleIDs: inout Set<String>) -> [AppTile] {

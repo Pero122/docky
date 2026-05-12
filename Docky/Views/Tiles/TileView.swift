@@ -361,12 +361,24 @@ struct TileView: View {
         return false
     }
 
-    /// Combined dim trigger for app icons: pressed (mouse-down before
-    /// release, tracked by `TilePressService`'s NSEvent monitor) or active
-    /// drag-over target. Folders/widgets/etc. don't dim — only `.app`
-    /// content participates.
-    private var appTileDimSignal: Bool {
-        isAppContent && (tilePress.pressedTileID == tile.id || isDocumentDropTarget)
+    /// Content types that participate in the press/drop-target darken.
+    /// Apps, folders (both kinds), and trash are launchable/drop targets
+    /// where the darken communicates "this is the thing you're acting
+    /// on"; widgets/spacers/dividers don't need the affordance.
+    private var participatesInPressDarken: Bool {
+        switch tile.content {
+        case .app, .appFolder, .folder, .trash:
+            return true
+        case .minimizedWindow, .spacer, .divider, .launchpad, .widget, .smartStack:
+            return false
+        }
+    }
+
+    /// Combined darken trigger: pressed (mouse-down before release,
+    /// tracked by `TilePressService`'s NSEvent monitor) or active
+    /// drop-target. Drives the `.brightness` darken below.
+    private var pressDarkenSignal: Bool {
+        participatesInPressDarken && (tilePress.pressedTileID == tile.id || isDocumentDropTarget)
     }
 
     private var showsAppFolderDropBackdrop: Bool {
@@ -374,9 +386,15 @@ struct TileView: View {
     }
 
     private var tileBodyOpacity: Double {
-        if isLockedProductPlacement { return 0.38 }
-        if appTileDimSignal { return 0.5 }
-        return 1
+        isLockedProductPlacement ? 0.38 : 1
+    }
+
+    /// `brightness(-0.35)` darkens icons in place without thinning them
+    /// out the way a 0.5 opacity dim would (since opacity also makes the
+    /// background show through, which on a transparent dock reads as
+    /// "fading away" rather than "being pressed").
+    private var pressDarkenAmount: Double {
+        pressDarkenSignal ? -0.35 : 0
     }
 
     private func lockedContextActions() -> [ContextAction] {
@@ -421,7 +439,8 @@ struct TileView: View {
     private var tileBody: some View {
         laidOutContent
             .opacity(tileBodyOpacity)
-            .animation(.easeInOut(duration: 0.12), value: appTileDimSignal)
+            .brightness(pressDarkenAmount)
+            .animation(.easeInOut(duration: 0.12), value: pressDarkenSignal)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
