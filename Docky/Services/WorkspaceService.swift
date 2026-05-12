@@ -517,7 +517,15 @@ final class WorkspaceService: ObservableObject {
     }
 
     func refresh() {
-        let regular = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        // Docky is invisible to itself: filtering at this source removes
+        // it from every downstream surface (dock tiles, settings pickers,
+        // grouped running apps in folders, etc.) without needing per-site
+        // exclusions. Matched by bundle ID so debug launches from Xcode
+        // are filtered too.
+        let dockyBundleID = Bundle.main.bundleIdentifier
+        let regular = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && $0.bundleIdentifier != dockyBundleID
+        }
         var newMap: [String: RunningApp] = [:]
         for app in regular {
             guard let bundleID = app.bundleIdentifier else { continue }

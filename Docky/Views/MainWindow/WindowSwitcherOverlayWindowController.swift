@@ -14,6 +14,12 @@ final class WindowSwitcherOverlayWindowController: NSWindowController {
     private let preferences = DockyPreferences.shared
 
     private var showsOverlayUI: Bool {
+        // Empty state — there's nothing to focus-preview, so we need the
+        // overlay to render the "No windows available" message.
+        if WindowSwitcherService.shared.windows.isEmpty {
+            return true
+        }
+
         // List layout always needs the overlay — it's the only thing the user
         // sees, since there are no window thumbnails behind it.
         if WindowSwitcherService.shared.resolvedLayout == .list {
@@ -250,7 +256,9 @@ private struct WindowSwitcherOverlayView: View {
                 // full screen, not the child's own bounds.
                 Color.clear.ignoresSafeArea()
 
-                if resolvedLayout == .thumbnails {
+                if switcher.windows.isEmpty {
+                    emptyStateCard
+                } else if resolvedLayout == .thumbnails {
                     Color.black.opacity(switcher.focusedPreview == nil ? 0 : 0.6)
                         .ignoresSafeArea()
 
@@ -317,6 +325,27 @@ private struct WindowSwitcherOverlayView: View {
         // text-only so a small radius reads cleaner than the chunky 46pt
         // used for the thumbnail card stack.
         WindowSwitcherListView(cornerRadius: 16, interiorPadding: interiorPadding)
+    }
+
+    private var emptyStateCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.on.rectangle.slash")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.7))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("No windows available")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text("Nothing to switch to right now.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(.primary.opacity(0.18))
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

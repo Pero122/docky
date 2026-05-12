@@ -109,14 +109,19 @@ final class WindowSwitcherService: ObservableObject {
         }
 
         let latestWindows = WindowRegistry.shared.visible
-        guard !latestWindows.isEmpty else {
-            dismiss()
-            return
-        }
 
         windows = latestWindows
         freezeWindowPreviews(for: latestWindows)
         isPresented = true
+
+        if latestWindows.isEmpty {
+            // Show the chrome with a "No windows available" message
+            // instead of silently no-op'ing — confirming the shortcut
+            // worked and there's just nothing to switch to.
+            selectedWindowIdentifier = nil
+            return
+        }
+
         let initialIndex: Int
         if latestWindows.count <= 1 {
             initialIndex = 0

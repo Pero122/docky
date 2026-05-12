@@ -474,9 +474,13 @@ final class WindowRegistry: ObservableObject {
 
     private func shouldTrack(_ app: NSRunningApplication) -> Bool {
         guard app.activationPolicy == .regular else { return false }
-        if let bundleId = app.bundleIdentifier,
-           filteredBundleIdentifiers.contains(bundleId) {
-            return false
+        if let bundleId = app.bundleIdentifier {
+            if filteredBundleIdentifiers.contains(bundleId) { return false }
+            // Docky itself is invisible to every Docky-owned surface
+            // (dock tiles, window switcher). Excluded by bundle ID so
+            // running the app as a debug helper from Xcode is filtered
+            // out too.
+            if bundleId == Bundle.main.bundleIdentifier { return false }
         }
         return true
     }

@@ -1847,11 +1847,20 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
     }
 
     func isAppHiddenInDocky(bundleIdentifier: String) -> Bool {
-        hiddenAppBundleIdentifiers.contains(bundleIdentifier)
+        // Docky reports itself as effectively hidden so any surface that
+        // gates on this returns the right answer even though Docky never
+        // actually shows up in the explicit hidden list.
+        if bundleIdentifier == Bundle.main.bundleIdentifier { return true }
+        return hiddenAppBundleIdentifiers.contains(bundleIdentifier)
     }
 
     func setAppHiddenInDocky(bundleIdentifier: String, isHidden: Bool) {
         guard !bundleIdentifier.isEmpty else {
+            return
+        }
+        // Docky never shows itself anywhere, so adding it to the
+        // hidden-apps list would be a confusing no-op — refuse it.
+        if bundleIdentifier == Bundle.main.bundleIdentifier {
             return
         }
 

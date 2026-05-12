@@ -31,7 +31,10 @@ struct HiddenAppsSettingsView: View {
     }
 
     private var hiddenApps: [HiddenAppSettingsEntry] {
-        preferences.hiddenAppBundleIdentifiers.compactMap { bundleIdentifier in
+        let dockyBundleID = Bundle.main.bundleIdentifier
+        return preferences.hiddenAppBundleIdentifiers
+            .filter { $0 != dockyBundleID }
+            .compactMap { bundleIdentifier in
             let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
             let displayName = appURL.map { FileManager.default.displayName(atPath: $0.path) } ?? bundleIdentifier
             let subtitle = appURL == nil
