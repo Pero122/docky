@@ -19,6 +19,7 @@ struct TileContainerView: View {
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var dockDrag = DockDragService.shared
+    @ObservedObject private var magnification = DockMagnificationService.shared
 
     @State private var draggedTileID: String?
     @State private var draggedTileOffset: CGFloat = 0
@@ -89,12 +90,12 @@ struct TileContainerView: View {
     @ViewBuilder
     private func contentStack(scrollableSectionLayout: ScrollableSectionLayout?) -> some View {
         if position.isVertical {
-            VStack(spacing: effectiveTileSpacing) {
+            VStack(alignment: stackHorizontalAlignment, spacing: effectiveTileSpacing) {
                 contentComponents(scrollableSectionLayout: scrollableSectionLayout)
             }
             .padding(.vertical, effectiveEdgePadding)
         } else {
-            HStack(spacing: effectiveTileSpacing) {
+            HStack(alignment: stackVerticalAlignment, spacing: effectiveTileSpacing) {
                 contentComponents(scrollableSectionLayout: scrollableSectionLayout)
             }
             .padding(.horizontal, effectiveEdgePadding)
@@ -186,13 +187,13 @@ struct TileContainerView: View {
     @ViewBuilder
     private func sectionTilesView(_ tiles: [Tile]) -> some View {
         if position.isVertical {
-            VStack(spacing: effectiveTileSpacing) {
+            VStack(alignment: stackHorizontalAlignment, spacing: effectiveTileSpacing) {
                 ForEach(tiles) { tile in
                     tileView(for: tile)
                 }
             }
         } else {
-            HStack(spacing: effectiveTileSpacing) {
+            HStack(alignment: stackVerticalAlignment, spacing: effectiveTileSpacing) {
                 ForEach(tiles) { tile in
                     tileView(for: tile)
                 }
@@ -202,14 +203,7 @@ struct TileContainerView: View {
 
     @ViewBuilder
     private func tileView(for tile: Tile) -> some View {
-        let size = Self.size(
-            for: tile,
-            tileSize: effectiveTileSize,
-            tileHeight: tileHeight,
-            tileSpacing: effectiveTileSpacing,
-            position: position,
-            compactWidgets: layout.compactsWidgetsForOverflow
-        )
+        let size = magnifiedTileSize(for: tile)
         TileView(
             tile: tile,
             isDocumentDropTarget: dockDrag.documentTargetTileID == tile.id,
@@ -828,6 +822,147 @@ struct TileContainerView: View {
 
     private var position: ResolvedDockWindowPosition {
         preferences.windowPosition.resolved(systemOrientation: dockSettings.orientation)
+    }
+
+    /// Cross-axis alignment that pushes tiles toward the screen edge the
+    /// dock is anchored to, so magnified icons grow inward (away from the
+    /// edge) instead of bleeding off-screen.
+    private var stackVerticalAlignment: VerticalAlignment {
+        switch position {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .left, .right: return .center
+        }
+    }
+
+    private var stackHorizontalAlignment: HorizontalAlignment {
+        switch position {
+        case .left: return .leading
+        case .right: return .trailing
+        case .top, .bottom: return .center
+        }
+    }
+
+    /// Magnification is suppressed in conditions where it would interfere
+    /// with another layout mechanism: overflow scaling, scrollable section
+    /// mode, edit mode, or an active drag. Also off when `largeSize` is at
+    /// or below `tileSize` (no headroom to grow into).
+    private var magnificationActive: Bool {
+        guard dockSettings.magnification else { return false }
+        guard !editMode.isActive else { return false }
+        guard draggedTileID == nil else { return false }
+        guard layout.contentScale > 0.999 else { return false }
+        guard !layout.compactsWidgetsForOverflow else { return false }
+        guard dockSettings.largeSize > dockSettings.tileSize else { return false }
+        return true
+    }
+
+    /// Pointer position projected onto the dock's primary axis, expressed
+    /// in *HStack-leading-relative* coords so it can be compared directly
+    /// against the rest centers from `restAxisCenter(forTileID:)`. The
+    /// HStack/VStack centers itself within the canvas when content fits,
+    /// so we subtract that same leading gap from the cursor before doing
+    /// any distance math. Without this, hovering over the first icon
+    /// magnifies icons further inward by the centering offset.
+    private var cursorAxisLocation: CGFloat? {
+        guard magnificationActive,
+              let pointer = magnification.pointerLocation else {
+            return nil
+        }
+        let canvasOrigin = layout.tileCanvasFrame.origin
+        let local = CGPoint(x: pointer.x - canvasOrigin.x, y: pointer.y - canvasOrigin.y)
+        let cursorInCanvas = position.isVertical ? local.y : local.x
+
+        let canvasAxisLength = projected(size: layout.tileCanvasFrame.size)
+        let contentAxisLength = totalAxisLength(for: layoutComponents)
+        guard contentAxisLength <= canvasAxisLength + 0.5 else {
+            return cursorInCanvas
+        }
+        let leadingOffset = max(0, (canvasAxisLength - contentAxisLength) / 2)
+        return cursorInCanvas - leadingOffset
+    }
+
+    private var magnificationModel: DockMagnificationModel {
+        DockMagnificationModel(
+            baseSize: effectiveTileSize,
+            maxSize: layout.scaled(dockSettings.largeSize),
+            influenceRadius: effectiveTileSize * 2.5,
+            strength: magnification.strength,
+            cursorAxisLocation: cursorAxisLocation
+        )
+    }
+
+    /// Tiles that participate in magnification. Widgets, smart stacks, and
+    /// dividers keep their natural extent; scaling those non-uniformly
+    /// would warp their internal layout.
+    private func shouldMagnify(_ tile: Tile) -> Bool {
+        switch tile.content {
+        case .app(let app):
+            return app.displayedWidget == nil
+        case .folder, .trash, .appFolder, .minimizedWindow, .launchpad, .spacer:
+            return true
+        case .widget, .smartStack, .divider:
+            return false
+        }
+    }
+
+    /// Rest-axis center for a tile, computed by walking the flat display
+    /// list with base sizes. Spacings are uniform across sections and
+    /// dividers, so a single cumulative pass matches the rendered layout.
+    private func restAxisCenter(forTileID id: String) -> CGFloat? {
+        let tiles = displayTiles
+        let spacing = effectiveTileSpacing
+        var runningOffset: CGFloat = effectiveEdgePadding
+        for (index, tile) in tiles.enumerated() {
+            let restSize = Self.size(
+                for: tile,
+                tileSize: effectiveTileSize,
+                tileHeight: tileHeight,
+                tileSpacing: spacing,
+                position: position,
+                compactWidgets: layout.compactsWidgetsForOverflow
+            )
+            let extent = projected(size: restSize)
+            if tile.id == id {
+                return runningOffset + extent / 2
+            }
+            runningOffset += extent
+            if index < tiles.count - 1 {
+                runningOffset += spacing
+            }
+        }
+        return nil
+    }
+
+    private func magnifiedTileSize(for tile: Tile) -> CGSize {
+        let restSize = Self.size(
+            for: tile,
+            tileSize: effectiveTileSize,
+            tileHeight: tileHeight,
+            tileSpacing: effectiveTileSpacing,
+            position: position,
+            compactWidgets: layout.compactsWidgetsForOverflow
+        )
+        guard magnificationActive,
+              shouldMagnify(tile),
+              let center = restAxisCenter(forTileID: tile.id) else {
+            return restSize
+        }
+        let model = magnificationModel
+        let magnifiedIcon = model.magnifiedExtent(
+            restSize: effectiveTileSize,
+            restAxisCenter: center
+        )
+        guard magnifiedIcon > effectiveTileSize else { return restSize }
+        let magnifiedHeight = magnifiedIcon + (tileHeight - effectiveTileSize)
+        return Self.size(
+            for: tile,
+            tileSize: magnifiedIcon,
+            tileHeight: magnifiedHeight,
+            tileSpacing: effectiveTileSpacing,
+            position: position,
+            compactWidgets: layout.compactsWidgetsForOverflow
+        )
     }
 
     private func isPinnedReorderable(tileID: String) -> Bool {

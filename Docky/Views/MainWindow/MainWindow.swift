@@ -46,7 +46,7 @@ final class MainWindowContainerView: NSView {
 
         let trackingArea = NSTrackingArea(
             rect: .zero,
-            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited],
+            options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
             owner: self,
             userInfo: nil
         )
@@ -57,11 +57,30 @@ final class MainWindowContainerView: NSView {
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         (window as? MainWindow)?.pointerDidEnterWindow()
+        forwardMagnificationPointer(from: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        forwardMagnificationPointer(from: event)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         (window as? MainWindow)?.pointerDidExitWindow()
+        DockMagnificationService.shared.clearPointer()
+    }
+
+    /// Pushes the live pointer position into the magnification service in
+    /// the hosting view's top-left origin coordinate space — same as what
+    /// SwiftUI sees via `GeometryProxy.frame(in: .global)`. Caller flips Y
+    /// when the underlying NSHostingView isn't already flipped.
+    private func forwardMagnificationPointer(from event: NSEvent) {
+        let inHosting = contentView.convert(event.locationInWindow, from: nil)
+        let topLeft: CGPoint = contentView.isFlipped
+            ? inHosting
+            : CGPoint(x: inHosting.x, y: contentView.bounds.height - inHosting.y)
+        DockMagnificationService.shared.updatePointer(at: topLeft)
     }
 }
 
@@ -156,6 +175,11 @@ final class MainWindow: NSPanel {
         isOpaque = false
         isMovableByWindowBackground = false
         alphaValue = 0
+        // Magnification tracking lives on the content view's NSTrackingArea
+        // (.mouseMoved + .activeAlways). Enabling mouseMoved on the window
+        // itself ensures AppKit routes those events through the responder
+        // chain even though this panel never becomes key.
+        acceptsMouseMovedEvents = true
         applyCollectionBehavior()
         observeFrameInputs()
         observeScreenAndSpaceInputs()
@@ -610,15 +634,30 @@ final class MainWindow: NSPanel {
         // Keep the chrome stretched across the current dock axis even when the
         // tile layout itself remains content-sized.
         let displayedAxisLength = availableAxisLength
+        // Magnified icons render beyond the chrome's natural cross-axis
+        // extent. We grow only the window, not the chrome rect, so the
+        // chrome itself keeps its resting shape and the icons spill into
+        // the headroom above (or beside, on a vertical dock) it.
+        let magnificationHeadroom: CGFloat = (
+            dockSettings.magnification && dockSettings.largeSize > dockSettings.tileSize
+        )
+            ? (dockSettings.largeSize - dockSettings.tileSize) * contentScale
+            : 0
+        let windowContentSize: CGSize = {
+            guard magnificationHeadroom > 0 else { return displayedContentSize }
+            return position.isVertical
+                ? CGSize(width: displayedContentSize.width + magnificationHeadroom, height: displayedContentSize.height)
+                : CGSize(width: displayedContentSize.width, height: displayedContentSize.height + magnificationHeadroom)
+        }()
         let width = displayedWindowWidth(
-            for: displayedContentSize,
+            for: windowContentSize,
             displayedAxisLength: displayedAxisLength,
             availableAxisLength: availableAxisLength,
             contentPadding: contentPadding,
             position: position
         )
         let height = displayedWindowHeight(
-            for: displayedContentSize,
+            for: windowContentSize,
             displayedAxisLength: displayedAxisLength,
             contentPadding: contentPadding,
             position: position

@@ -55,12 +55,14 @@ final class DockSettingsService: ObservableObject {
 
     func setTileSize(_ size: CGFloat) {
         tileSize = size
-        syncMagnifiedSizeToTileSize()
+        if largeSize < tileSize {
+            largeSize = tileSize
+        }
         persistValues()
     }
 
     func setLargeSize(_ size: CGFloat) {
-        largeSize = tileSize
+        largeSize = max(tileSize, size)
         persistValues()
     }
 
@@ -104,7 +106,7 @@ final class DockSettingsService: ObservableObject {
             showProcessIndicators = value
         }
 
-        syncMagnifiedSizeToTileSize()
+        clampLargeSize()
     }
 
     private func applyValues(_ values: [String: Any]) {
@@ -142,11 +144,13 @@ final class DockSettingsService: ObservableObject {
             showProcessIndicators = value
         }
 
-        syncMagnifiedSizeToTileSize()
+        clampLargeSize()
     }
 
-    private func syncMagnifiedSizeToTileSize() {
-        largeSize = tileSize
+    private func clampLargeSize() {
+        if largeSize < tileSize {
+            largeSize = tileSize
+        }
     }
 
     private func persistValues(hasImportedSystemDockSettings: Bool? = nil) {

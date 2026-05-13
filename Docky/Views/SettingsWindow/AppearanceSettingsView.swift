@@ -447,7 +447,20 @@ struct AppearanceSettingsView: View {
                 Toggle("Magnification", isOn: systemDockMagnificationBinding)
                     .font(.headline)
 
-                Text("Allows tiles to use the enlarged dock sizing behavior when enabled.")
+                if dockSettings.magnification {
+                    HStack {
+                        Slider(value: systemDockLargeSizeBinding, in: largeSizeRange, step: 1) {
+                            Text("Magnified Size")
+                        }
+                        .labelsHidden()
+
+                        Text("\(Int(dockSettings.largeSize.rounded())) pt")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+
+                Text("Tiles near the pointer grow toward the magnified size and smoothly fall off with distance.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -634,6 +647,18 @@ struct AppearanceSettingsView: View {
             get: { dockSettings.magnification },
             set: { dockSettings.setMagnification($0) }
         )
+    }
+
+    private var systemDockLargeSizeBinding: Binding<Double> {
+        Binding(
+            get: { Double(dockSettings.largeSize) },
+            set: { dockSettings.setLargeSize(CGFloat($0)) }
+        )
+    }
+
+    private var largeSizeRange: ClosedRange<Double> {
+        let lower = Double(dockSettings.tileSize)
+        return lower...max(lower, 256)
     }
 
     private var windowCornerRadiusBinding: Binding<CGFloat> {
