@@ -325,8 +325,13 @@ private struct ThemePreviewBadge: View {
         let background: NSImage? = cover == nil
             ? backgroundImageURL.flatMap { NSImage(contentsOf: $0) }
             : nil
+        let clipShape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
 
-        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        // The outer `.clipShape` guarantees the fill, image overlay,
+        // and anything added later are all confined to the rounded
+        // bounds — `scaledToFill` will gladly render outside the
+        // frame, and per-image clipping has been forgotten before.
+        Rectangle()
             .fill(tint.map(Color.init(nsColor:)) ?? Color.secondary.opacity(0.2))
             .frame(width: Self.size.width, height: Self.size.height)
             .overlay {
@@ -334,19 +339,15 @@ private struct ThemePreviewBadge: View {
                     Image(nsImage: cover)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: Self.size.width, height: Self.size.height)
-                        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
                 } else if let background {
                     Image(nsImage: background)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: Self.size.width, height: Self.size.height)
-                        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
                 }
             }
+            .clipShape(clipShape)
             .overlay {
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                    .strokeBorder(.separator, lineWidth: 0.5)
+                clipShape.strokeBorder(.separator, lineWidth: 0.5)
             }
     }
 
