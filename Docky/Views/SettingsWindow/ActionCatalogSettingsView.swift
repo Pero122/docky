@@ -11,6 +11,16 @@ struct ActionCatalogSettingsView: View {
 
     var body: some View {
         Form {
+            Section("About Actions") {
+                Text("Actions are menu items Docky injects into each tile's right-click menu. A catalog package ships a curated bundle of them; once it's loaded, every action it defines is automatically available on the matching tile type — apps, folders, the Trash, the Launchpad, and the divider all get their own set, with no per-tile setup needed.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Action kinds Docky will execute: built-in commands, AppleScript, and macOS menu-bar clicks. The first time an app-targeted AppleScript or menu-click action runs, macOS may prompt for Automation permission.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if !product.isUnlocked(.scriptedActions) {
                 Section {
                     ProFeatureNotice(feature: .scriptedActions)
@@ -47,7 +57,7 @@ struct ActionCatalogSettingsView: View {
             }
 
             Section("Scripted Actions") {
-                Text("Docky loads menu definitions from bundled JSON and executes only reviewed action kinds: builtin, applescript, and menuClick. App-targeted AppleScript and menuClick actions may trigger macOS Automation prompts the first time you use them. The catalog format is designed so future curated packages can add actions and append menu items at approved insertion points without replacing Docky’s core menus.")
+                Text("Docky loads action definitions from bundled JSON. Future curated packages can add actions and append menu items at approved insertion points without replacing Docky's core menus.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
