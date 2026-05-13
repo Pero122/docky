@@ -435,6 +435,36 @@ struct TileView: View {
         (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
     }
 
+    /// Background drawn behind the tile when the cursor is over it.
+    /// Drives the Win10-style "lighten on hover" treatment; respects
+    /// the theme/user-supplied color, image, opacity, and clip radius.
+    /// `EmptyView` when no source is set so the tile stays transparent.
+    @ViewBuilder
+    private var hoverBackground: some View {
+        if isHovering, hasHoverBackground {
+            let cornerRadius = preferences.effectiveTileHoverBackgroundCornerRadius
+            let opacity = preferences.effectiveTileHoverBackgroundOpacity
+            ZStack {
+                if let url = preferences.effectiveTileHoverBackgroundImageURL,
+                   let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else if let color = preferences.effectiveTileHoverBackgroundColor {
+                    Color(nsColor: color)
+                }
+            }
+            .opacity(opacity)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var hasHoverBackground: Bool {
+        preferences.effectiveTileHoverBackgroundImageURL != nil
+            || preferences.effectiveTileHoverBackgroundColor != nil
+    }
+
     /// Effective drop shadow applied behind the tile's icon content.
     /// Returns `Color.clear` when no shadow color is set — combined
     /// with a 0 radius below, that makes `.shadow(...)` a true no-op.
@@ -460,11 +490,17 @@ struct TileView: View {
 
     private var tileBody: some View {
         laidOutContent
+            // Icon-only padding: shrinks the rendered icon without
+            // touching the tile's layout box. Sized per theme/user.
+            .padding(layout.scaled(preferences.effectiveTileIconPadding))
+            .scaleEffect(isHovering ? preferences.effectiveTileHoverScale : 1)
             .shadow(color: iconShadowColor, radius: iconShadowRadius)
-            .opacity(tileBodyOpacity)
+            .opacity(tileBodyOpacity * (isHovering ? preferences.effectiveTileHoverOpacity : 1))
             .brightness(pressDarkenAmount)
             .animation(.easeInOut(duration: 0.12), value: pressDarkenSignal)
+            .animation(.easeInOut(duration: 0.15), value: isHovering)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .background(hoverBackground)
             .overlay(alignment: runningIndicatorAlignment) {
                 runningIndicator
                     .padding(runningIndicatorEdge, runningIndicatorInset)

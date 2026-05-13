@@ -873,6 +873,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         Keys.tileVerticalPadding,
         Keys.tileSpacing,
         Keys.tileClipShape,
+        Keys.tileIconPadding,
+        Keys.tileHoverOpacity,
+        Keys.tileHoverScale,
+        Keys.tileHoverBackgroundColor,
+        Keys.tileHoverBackgroundImagePath,
+        Keys.tileHoverBackgroundOpacity,
+        Keys.tileHoverBackgroundCornerRadius,
         Keys.windowCornerRadius,
         Keys.windowCornerRadiusTopLeading,
         Keys.windowCornerRadiusTopTrailing,
@@ -978,6 +985,93 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             guard tileClipShape != oldValue else { return }
             defaults.set(tileClipShape.rawValue, forKey: Keys.tileClipShape)
             markAppearanceOverride(Keys.tileClipShape)
+        }
+    }
+
+    /// Extra padding inside each tile around the icon — shrinks the
+    /// rendered icon while leaving the tile bounds untouched.
+    var tileIconPadding: CGFloat {
+        didSet {
+            guard tileIconPadding != oldValue else { return }
+            defaults.set(Double(tileIconPadding), forKey: Keys.tileIconPadding)
+            markAppearanceOverride(Keys.tileIconPadding)
+        }
+    }
+
+    /// Optional tile-hover effects. Each property is nullable; if the
+    /// user clears one (sets it back to its absent state) the override
+    /// flag is cleared so the active theme can resume providing the
+    /// value.
+    var tileHoverOpacity: CGFloat? {
+        didSet {
+            guard tileHoverOpacity != oldValue else { return }
+            persistOptionalDouble(tileHoverOpacity, forKey: Keys.tileHoverOpacity)
+            if tileHoverOpacity == nil {
+                clearAppearanceOverride(Keys.tileHoverOpacity)
+            } else {
+                markAppearanceOverride(Keys.tileHoverOpacity)
+            }
+        }
+    }
+
+    var tileHoverScale: CGFloat? {
+        didSet {
+            guard tileHoverScale != oldValue else { return }
+            persistOptionalDouble(tileHoverScale, forKey: Keys.tileHoverScale)
+            if tileHoverScale == nil {
+                clearAppearanceOverride(Keys.tileHoverScale)
+            } else {
+                markAppearanceOverride(Keys.tileHoverScale)
+            }
+        }
+    }
+
+    var tileHoverBackgroundColor: DockColor? {
+        didSet {
+            guard tileHoverBackgroundColor != oldValue else { return }
+            persistOptionalColor(tileHoverBackgroundColor, forKey: Keys.tileHoverBackgroundColor)
+            if tileHoverBackgroundColor == nil {
+                clearAppearanceOverride(Keys.tileHoverBackgroundColor)
+            } else {
+                markAppearanceOverride(Keys.tileHoverBackgroundColor)
+            }
+        }
+    }
+
+    var tileHoverBackgroundImagePath: String? {
+        didSet {
+            guard tileHoverBackgroundImagePath != oldValue else { return }
+            if let path = tileHoverBackgroundImagePath, !path.isEmpty {
+                defaults.set(path, forKey: Keys.tileHoverBackgroundImagePath)
+                markAppearanceOverride(Keys.tileHoverBackgroundImagePath)
+            } else {
+                defaults.removeObject(forKey: Keys.tileHoverBackgroundImagePath)
+                clearAppearanceOverride(Keys.tileHoverBackgroundImagePath)
+            }
+        }
+    }
+
+    var tileHoverBackgroundOpacity: CGFloat? {
+        didSet {
+            guard tileHoverBackgroundOpacity != oldValue else { return }
+            persistOptionalDouble(tileHoverBackgroundOpacity, forKey: Keys.tileHoverBackgroundOpacity)
+            if tileHoverBackgroundOpacity == nil {
+                clearAppearanceOverride(Keys.tileHoverBackgroundOpacity)
+            } else {
+                markAppearanceOverride(Keys.tileHoverBackgroundOpacity)
+            }
+        }
+    }
+
+    var tileHoverBackgroundCornerRadius: CGFloat? {
+        didSet {
+            guard tileHoverBackgroundCornerRadius != oldValue else { return }
+            persistOptionalDouble(tileHoverBackgroundCornerRadius, forKey: Keys.tileHoverBackgroundCornerRadius)
+            if tileHoverBackgroundCornerRadius == nil {
+                clearAppearanceOverride(Keys.tileHoverBackgroundCornerRadius)
+            } else {
+                markAppearanceOverride(Keys.tileHoverBackgroundCornerRadius)
+            }
         }
     }
 
@@ -1947,6 +2041,84 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         return appearanceOverride(Keys.tileClipShape, raw: tileClipShape, themed: themed)
     }
 
+    var effectiveTileIconPadding: CGFloat {
+        let resolved = appearanceOverride(
+            Keys.tileIconPadding,
+            raw: tileIconPadding,
+            themed: ThemeManager.shared.activeManifest?.appearance.tile?.iconPadding
+        )
+        return max(0, resolved)
+    }
+
+    /// Hover opacity multiplier; 1.0 when no theme/user value is set.
+    var effectiveTileHoverOpacity: CGFloat {
+        let themed = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.opacity
+        if isAppearanceOverridden(Keys.tileHoverOpacity), let user = tileHoverOpacity {
+            return max(0, min(1, user))
+        }
+        if let themed {
+            return max(0, min(1, themed))
+        }
+        return 1
+    }
+
+    /// Hover scale; 1.0 when no theme/user value is set.
+    var effectiveTileHoverScale: CGFloat {
+        let themed = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.scale
+        if isAppearanceOverridden(Keys.tileHoverScale), let user = tileHoverScale {
+            return max(0.1, user)
+        }
+        if let themed {
+            return max(0.1, themed)
+        }
+        return 1
+    }
+
+    var effectiveTileHoverBackgroundColor: NSColor? {
+        if isAppearanceOverridden(Keys.tileHoverBackgroundColor), let user = tileHoverBackgroundColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.backgroundColor {
+            return themed.dockColor.nsColor
+        }
+        return nil
+    }
+
+    var effectiveTileHoverBackgroundImageURL: URL? {
+        if isAppearanceOverridden(Keys.tileHoverBackgroundImagePath),
+           let path = tileHoverBackgroundImagePath, !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        if let assetPath = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.backgroundImage,
+           let url = ThemeManager.shared.activeAssetURL(assetPath) {
+            return url
+        }
+        return nil
+    }
+
+    var effectiveTileHoverBackgroundOpacity: CGFloat {
+        let themed = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.backgroundOpacity
+        if isAppearanceOverridden(Keys.tileHoverBackgroundOpacity), let user = tileHoverBackgroundOpacity {
+            return max(0, min(1, user))
+        }
+        if let themed {
+            return max(0, min(1, themed))
+        }
+        return 1
+    }
+
+    var effectiveTileHoverBackgroundCornerRadius: CGFloat {
+        let themed = ThemeManager.shared.activeManifest?.appearance.tile?.hover?.backgroundCornerRadius
+        if isAppearanceOverridden(Keys.tileHoverBackgroundCornerRadius), let user = tileHoverBackgroundCornerRadius {
+            return max(0, user)
+        }
+        if let themed {
+            return max(0, themed)
+        }
+        return 0
+    }
+
     var effectiveWindowCornerRadius: CGFloat {
         appearanceOverride(
             Keys.windowCornerRadius,
@@ -2590,6 +2762,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let tileVerticalPadding = "docky.tileVerticalPadding"
         static let tileSpacing = "docky.tileSpacing"
         static let tileClipShape = "docky.tileClipShape"
+        static let tileIconPadding = "docky.tileIconPadding"
+        static let tileHoverOpacity = "docky.tileHoverOpacity"
+        static let tileHoverScale = "docky.tileHoverScale"
+        static let tileHoverBackgroundColor = "docky.tileHoverBackgroundColor"
+        static let tileHoverBackgroundImagePath = "docky.tileHoverBackgroundImagePath"
+        static let tileHoverBackgroundOpacity = "docky.tileHoverBackgroundOpacity"
+        static let tileHoverBackgroundCornerRadius = "docky.tileHoverBackgroundCornerRadius"
         static let windowCornerRadius = "docky.windowCornerRadius"
         static let windowCornerRadiusTopLeading = "docky.windowCornerRadiusTopLeading"
         static let windowCornerRadiusTopTrailing = "docky.windowCornerRadiusTopTrailing"
@@ -2679,6 +2858,10 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let tileVerticalPadding: CGFloat = 8
         static let tileSpacing: CGFloat = 0
         static let tileClipShape: DockClipShape = .rounded
+        static let tileIconPadding: CGFloat = 0
+        static let tileHoverOptional: CGFloat? = nil
+        static let tileHoverBackgroundColor: DockColor? = nil
+        static let tileHoverBackgroundImagePath: String? = nil
         static let windowCornerRadius: CGFloat = 24
         static let windowCornerRadiusPerCorner: CGFloat? = nil
         static let windowContentInset: CGFloat = 2
@@ -2761,6 +2944,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         let storedVerticalPadding = defaults.object(forKey: Keys.tileVerticalPadding) as? Double
         let storedTileSpacing = defaults.object(forKey: Keys.tileSpacing) as? Double
         let storedTileClipShape = defaults.string(forKey: Keys.tileClipShape)
+        let storedTileIconPadding = defaults.object(forKey: Keys.tileIconPadding) as? Double
+        let storedTileHoverOpacity = defaults.object(forKey: Keys.tileHoverOpacity) as? Double
+        let storedTileHoverScale = defaults.object(forKey: Keys.tileHoverScale) as? Double
+        let storedTileHoverBackgroundColor = defaults.data(forKey: Keys.tileHoverBackgroundColor)
+        let storedTileHoverBackgroundImagePath = defaults.string(forKey: Keys.tileHoverBackgroundImagePath)
+        let storedTileHoverBackgroundOpacity = defaults.object(forKey: Keys.tileHoverBackgroundOpacity) as? Double
+        let storedTileHoverBackgroundCornerRadius = defaults.object(forKey: Keys.tileHoverBackgroundCornerRadius) as? Double
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
         let storedWindowCornerRadiusTopLeading = defaults.object(forKey: Keys.windowCornerRadiusTopLeading) as? Double
         let storedWindowCornerRadiusTopTrailing = defaults.object(forKey: Keys.windowCornerRadiusTopTrailing) as? Double
@@ -2847,6 +3037,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.tileVerticalPadding = storedVerticalPadding.map { CGFloat($0) } ?? DefaultValues.tileVerticalPadding
         self.tileSpacing = storedTileSpacing.map { CGFloat($0) } ?? DefaultValues.tileSpacing
         self.tileClipShape = (storedTileClipShape.flatMap(DockClipShape.init(rawValue:)) ?? DefaultValues.tileClipShape)
+        self.tileIconPadding = storedTileIconPadding.map { CGFloat($0) } ?? DefaultValues.tileIconPadding
+        self.tileHoverOpacity = storedTileHoverOpacity.map { CGFloat($0) }
+        self.tileHoverScale = storedTileHoverScale.map { CGFloat($0) }
+        self.tileHoverBackgroundColor = Self.decodeColor(from: storedTileHoverBackgroundColor)
+        self.tileHoverBackgroundImagePath = storedTileHoverBackgroundImagePath
+        self.tileHoverBackgroundOpacity = storedTileHoverBackgroundOpacity.map { CGFloat($0) }
+        self.tileHoverBackgroundCornerRadius = storedTileHoverBackgroundCornerRadius.map { CGFloat($0) }
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
         self.windowCornerRadiusTopLeading = storedWindowCornerRadiusTopLeading.map { CGFloat($0) }
         self.windowCornerRadiusTopTrailing = storedWindowCornerRadiusTopTrailing.map { CGFloat($0) }

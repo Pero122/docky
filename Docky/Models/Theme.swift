@@ -82,6 +82,31 @@ struct ThemeTile: Codable, Equatable {
     var clipShape: String?
     var verticalPadding: CGFloat?
     var spacing: CGFloat?
+    /// Extra padding applied inside each tile around the icon, so the
+    /// icon renders smaller than its tile slot. Useful when a theme
+    /// wants chunky tile boxes (Win10 taskbar feel) without shrinking
+    /// the click target / layout cell.
+    var iconPadding: CGFloat?
+    /// How the tile reacts to mouse hover. Each field is optional so
+    /// a theme can opt into just one effect (e.g. only `backgroundColor`).
+    var hover: ThemeTileHover?
+}
+
+struct ThemeTileHover: Codable, Equatable {
+    /// Multiplied into the tile's opacity while hovered.
+    var opacity: CGFloat?
+    /// Scale applied to the icon contents while hovered.
+    var scale: CGFloat?
+    /// Solid fill behind the tile when hovered. Ignored when
+    /// `backgroundImage` resolves to an asset.
+    var backgroundColor: ThemeColor?
+    /// Asset-relative path to an image drawn behind the tile when hovered.
+    var backgroundImage: String?
+    /// Opacity multiplier applied to whichever background source
+    /// (color or image) is active.
+    var backgroundOpacity: CGFloat?
+    /// Corner radius applied to the hover background's clipping rect.
+    var backgroundCornerRadius: CGFloat?
 }
 
 struct ThemeWindow: Codable, Equatable {

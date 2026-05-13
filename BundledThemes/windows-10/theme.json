@@ -32,7 +32,12 @@
     "tile": {
       "clipShape": "rounded",
       "spacing": 4,
-      "verticalPadding": 4
+      "verticalPadding": 4,
+      "iconPadding": 6,
+      "hover": {
+        "backgroundColor": { "r": 1, "g": 1, "b": 1 },
+        "backgroundOpacity": 0.12
+      }
     },
     "window": {
       "clipShape": "rounded",
