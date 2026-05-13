@@ -12,6 +12,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case appearanceTileLayout
     case appearanceWindowShape
     case appearanceWindowBackground
+    case appearanceThemes
     case appIcons
     case behaviorPlacement
     case behaviorVisibility
@@ -37,6 +38,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: "Tile Layout"
         case .appearanceWindowShape: "Window Shape"
         case .appearanceWindowBackground: "Window Background"
+        case .appearanceThemes: "Themes"
         case .appIcons: "App Icons"
         case .behaviorPlacement: "Placement"
         case .behaviorVisibility: "Visibility"
@@ -62,6 +64,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: "square.grid.3x3"
         case .appearanceWindowShape: "rectangle.dashed"
         case .appearanceWindowBackground: "rectangle.fill"
+        case .appearanceThemes: "paintpalette"
         case .appIcons: "app.badge"
         case .behaviorPlacement: "arrow.up.and.down.and.arrow.left.and.right"
         case .behaviorVisibility: "eye"
@@ -87,6 +90,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: .orange
         case .appearanceWindowShape: .indigo
         case .appearanceWindowBackground: .blue
+        case .appearanceThemes: .pink
         case .appIcons: .pink
         case .behaviorPlacement: .teal
         case .behaviorVisibility: .cyan
@@ -123,6 +127,7 @@ private struct SettingsSection: Identifiable {
 private let settingsSections: [SettingsSection] = [
     SettingsSection(id: "product", title: "Product", panes: [.docky]),
     SettingsSection(id: "appearance", title: "Appearance", panes: [
+        .appearanceThemes,
         .appearanceGeneral,
         .appearanceIndicators,
         .appearanceTileLayout,
@@ -246,6 +251,8 @@ private struct SettingsDetailView: View {
             AppearanceSettingsView(subsection: .windowShape)
         case .appearanceWindowBackground:
             AppearanceSettingsView(subsection: .windowBackground)
+        case .appearanceThemes:
+            ThemesSettingsView()
         case .appIcons:
             AppIconsSettingsView()
         case .behaviorPlacement:
