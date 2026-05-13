@@ -232,6 +232,29 @@ struct AppearanceSettingsView: View {
             format: { String(format: "%.2fx", $0) },
             description: "Scales custom divider images. Has no effect on the default line."
         )
+
+        sliderRow(
+            title: "Opacity",
+            value: $preferences.dividerOpacity,
+            range: 0...1,
+            step: 0.05,
+            format: { "\(Int(($0 * 100).rounded()))%" },
+            description: "Controls how visible dividers are. 100% is fully opaque; 0% hides them entirely."
+        )
+
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Use Custom Divider Color", isOn: usesCustomDividerColorBinding)
+                .font(.headline)
+
+            if preferences.effectiveDividerColor != nil {
+                ColorPicker("Divider Color", selection: dividerColorBinding, supportsOpacity: false)
+            }
+
+            Text("Replaces the default text-tracking color of the plain divider line. Has no effect on dividers that use a custom image.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -385,6 +408,42 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 4)
 
             VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use Icon Shadow", isOn: usesIconShadowBinding)
+                    .font(.headline)
+
+                if preferences.effectiveIconShadowColor != nil {
+                    ColorPicker("Shadow Color", selection: iconShadowColorBinding, supportsOpacity: false)
+
+                    HStack {
+                        Text("Radius")
+                        Slider(value: $preferences.iconShadowRadius, in: 0...32, step: 0.5) {
+                            Text("Shadow Radius")
+                        }
+                        .labelsHidden()
+                        Text(String(format: "%.1f pt", preferences.effectiveIconShadowRadius))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+
+                    HStack {
+                        Text("Opacity")
+                        Slider(value: $preferences.iconShadowOpacity, in: 0...1, step: 0.05) {
+                            Text("Shadow Opacity")
+                        }
+                        .labelsHidden()
+                        Text("\(Int((preferences.effectiveIconShadowOpacity * 100).rounded()))%")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+                }
+
+                Text("Adds a drop shadow behind every icon-bearing tile. Has no visible effect on spacers and dividers.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
                 Toggle("Magnification", isOn: systemDockMagnificationBinding)
                     .font(.headline)
 
@@ -445,6 +504,31 @@ struct AppearanceSettingsView: View {
             }
             .padding(.vertical, 4)
             .disabled(preferences.windowClipShape == .circle)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Use Custom Border", isOn: usesCustomWindowBorderBinding)
+                    .font(.headline)
+
+                if preferences.effectiveWindowBorderColor != nil {
+                    ColorPicker("Border Color", selection: windowBorderColorBinding, supportsOpacity: false)
+
+                    HStack {
+                        Text("Border Width")
+                        Slider(value: $preferences.windowBorderWidth, in: 0...8, step: 0.5) {
+                            Text("Border Width")
+                        }
+                        .labelsHidden()
+                        Text(String(format: "%.1f pt", preferences.effectiveWindowBorderWidth))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
+                    }
+                }
+
+                Text("Override the chrome outline with a solid color. When off, Docky uses its default glass stroke (or no stroke when Glass is disabled).")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -629,6 +713,87 @@ struct AppearanceSettingsView: View {
         Binding(
             get: { preferences.effectiveWindowTintOpacity },
             set: { preferences.windowTintOpacity = min(max($0, 0), 1) }
+        )
+    }
+
+    private var usesCustomWindowBorderBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.effectiveWindowBorderColor != nil },
+            set: { usesBorder in
+                if usesBorder {
+                    let seed = preferences.effectiveWindowBorderColor ?? .labelColor
+                    preferences.windowBorderColor = DockColor(nsColor: seed)
+                } else {
+                    preferences.windowBorderColor = nil
+                }
+            }
+        )
+    }
+
+    private var windowBorderColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let nsColor = preferences.effectiveWindowBorderColor ?? .labelColor
+                return Color(nsColor: nsColor)
+            },
+            set: { newValue in
+                guard let color = DockColor(nsColor: NSColor(newValue)) else { return }
+                preferences.windowBorderColor = color
+            }
+        )
+    }
+
+    private var usesIconShadowBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.effectiveIconShadowColor != nil },
+            set: { usesShadow in
+                if usesShadow {
+                    let seed = preferences.effectiveIconShadowColor ?? .black
+                    preferences.iconShadowColor = DockColor(nsColor: seed)
+                } else {
+                    preferences.iconShadowColor = nil
+                }
+            }
+        )
+    }
+
+    private var iconShadowColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let nsColor = preferences.effectiveIconShadowColor ?? .black
+                return Color(nsColor: nsColor)
+            },
+            set: { newValue in
+                guard let color = DockColor(nsColor: NSColor(newValue)) else { return }
+                preferences.iconShadowColor = color
+            }
+        )
+    }
+
+    private var usesCustomDividerColorBinding: Binding<Bool> {
+        Binding(
+            get: { preferences.effectiveDividerColor != nil },
+            set: { usesColor in
+                if usesColor {
+                    let seed = preferences.effectiveDividerColor ?? .labelColor
+                    preferences.dividerColor = DockColor(nsColor: seed)
+                } else {
+                    preferences.dividerColor = nil
+                }
+            }
+        )
+    }
+
+    private var dividerColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let nsColor = preferences.effectiveDividerColor ?? .labelColor
+                return Color(nsColor: nsColor)
+            },
+            set: { newValue in
+                guard let color = DockColor(nsColor: NSColor(newValue)) else { return }
+                preferences.dividerColor = color
+            }
         )
     }
 

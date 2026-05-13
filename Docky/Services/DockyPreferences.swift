@@ -889,6 +889,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         Keys.dividerPaddingFraction,
         Keys.dividerImageScale,
         Keys.dividerOffset,
+        Keys.dividerOpacity,
+        Keys.dividerColor,
+        Keys.windowBorderColor,
+        Keys.windowBorderWidth,
+        Keys.iconShadowColor,
+        Keys.iconShadowRadius,
+        Keys.iconShadowOpacity,
     ]
 
     /// Whether the user has an explicit override for this preference
@@ -1006,6 +1013,68 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             guard disablesGlassLook != oldValue else { return }
             defaults.set(disablesGlassLook, forKey: Keys.disablesGlassLook)
             markAppearanceOverride(Keys.disablesGlassLook)
+        }
+    }
+
+    /// Optional flat-color outline drawn around the dock chrome. When
+    /// `nil` the chrome falls back to the default glass border (or no
+    /// border when glass is disabled).
+    var windowBorderColor: DockColor? {
+        didSet {
+            guard windowBorderColor != oldValue else { return }
+            persistOptionalColor(windowBorderColor, forKey: Keys.windowBorderColor)
+            if windowBorderColor == nil {
+                clearAppearanceOverride(Keys.windowBorderColor)
+            } else {
+                markAppearanceOverride(Keys.windowBorderColor)
+            }
+        }
+    }
+
+    /// Stroke width applied to `windowBorderColor`. Ignored when the
+    /// color is nil. Stored even when there's no color so the slider
+    /// remembers its position between toggles.
+    var windowBorderWidth: CGFloat {
+        didSet {
+            guard windowBorderWidth != oldValue else { return }
+            defaults.set(Double(windowBorderWidth), forKey: Keys.windowBorderWidth)
+            markAppearanceOverride(Keys.windowBorderWidth)
+        }
+    }
+
+    /// Optional drop shadow color applied behind icon-bearing tiles.
+    /// `nil` disables the shadow regardless of the radius/opacity
+    /// values — those are kept around so the user's slider state
+    /// persists across toggles.
+    var iconShadowColor: DockColor? {
+        didSet {
+            guard iconShadowColor != oldValue else { return }
+            persistOptionalColor(iconShadowColor, forKey: Keys.iconShadowColor)
+            if iconShadowColor == nil {
+                clearAppearanceOverride(Keys.iconShadowColor)
+            } else {
+                markAppearanceOverride(Keys.iconShadowColor)
+            }
+        }
+    }
+
+    /// Blur radius of the icon shadow in points.
+    var iconShadowRadius: CGFloat {
+        didSet {
+            guard iconShadowRadius != oldValue else { return }
+            defaults.set(Double(iconShadowRadius), forKey: Keys.iconShadowRadius)
+            markAppearanceOverride(Keys.iconShadowRadius)
+        }
+    }
+
+    /// Alpha multiplier applied to `iconShadowColor`. 1.0 = full
+    /// strength, 0 = invisible. Multiplied with the color's own alpha
+    /// at render time.
+    var iconShadowOpacity: CGFloat {
+        didSet {
+            guard iconShadowOpacity != oldValue else { return }
+            defaults.set(Double(iconShadowOpacity), forKey: Keys.iconShadowOpacity)
+            markAppearanceOverride(Keys.iconShadowOpacity)
         }
     }
 
@@ -1437,6 +1506,30 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Alpha multiplier applied to dividers. 1.0 = fully opaque, 0 = invisible.
+    var dividerOpacity: CGFloat {
+        didSet {
+            guard dividerOpacity != oldValue else { return }
+            defaults.set(dividerOpacity, forKey: Keys.dividerOpacity)
+            markAppearanceOverride(Keys.dividerOpacity)
+        }
+    }
+
+    /// Optional flat fill color used when no divider image is set.
+    /// `nil` falls back to SwiftUI's hierarchical `.primary` so the
+    /// divider tracks the system label color by default.
+    var dividerColor: DockColor? {
+        didSet {
+            guard dividerColor != oldValue else { return }
+            persistOptionalColor(dividerColor, forKey: Keys.dividerColor)
+            if dividerColor == nil {
+                clearAppearanceOverride(Keys.dividerColor)
+            } else {
+                markAppearanceOverride(Keys.dividerColor)
+            }
+        }
+    }
+
     /// Optional per-app icon overrides used by app tiles.
     var appIconOverrides: [AppIconOverride] {
         didSet {
@@ -1811,6 +1904,66 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         return appearanceOverride(Keys.windowBackgroundImageMode, raw: windowBackgroundImageMode, themed: themed)
     }
 
+    /// Theme-aware border color. `nil` means no theme-supplied border
+    /// is set; callers should fall back to the default glass treatment.
+    var effectiveWindowBorderColor: NSColor? {
+        if isAppearanceOverridden(Keys.windowBorderColor), let user = windowBorderColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.window?.borderColor {
+            return themed.dockColor.nsColor
+        }
+        return nil
+    }
+
+    var effectiveWindowBorderWidth: CGFloat {
+        appearanceOverride(
+            Keys.windowBorderWidth,
+            raw: windowBorderWidth,
+            themed: ThemeManager.shared.activeManifest?.appearance.window?.borderWidth
+        )
+    }
+
+    /// Theme-aware icon shadow color. `nil` disables the shadow.
+    var effectiveIconShadowColor: NSColor? {
+        if isAppearanceOverridden(Keys.iconShadowColor), let user = iconShadowColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.iconShadow?.color {
+            return themed.dockColor.nsColor
+        }
+        return nil
+    }
+
+    var effectiveIconShadowRadius: CGFloat {
+        appearanceOverride(
+            Keys.iconShadowRadius,
+            raw: iconShadowRadius,
+            themed: ThemeManager.shared.activeManifest?.appearance.iconShadow?.radius
+        )
+    }
+
+    var effectiveIconShadowOpacity: CGFloat {
+        let raw = appearanceOverride(
+            Keys.iconShadowOpacity,
+            raw: iconShadowOpacity,
+            themed: ThemeManager.shared.activeManifest?.appearance.iconShadow?.opacity
+        )
+        return min(max(raw, 0), 1)
+    }
+
+    /// Theme-aware flat divider fill. `nil` means the divider should
+    /// fall back to SwiftUI's `.primary`.
+    var effectiveDividerColor: NSColor? {
+        if isAppearanceOverridden(Keys.dividerColor), let user = dividerColor {
+            return user.nsColor
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.color {
+            return themed.dockColor.nsColor
+        }
+        return nil
+    }
+
     var effectiveActiveIndicatorShape: DockTileIndicatorShape {
         let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.shape
             .flatMap(DockTileIndicatorShape.init(rawValue:))
@@ -1890,6 +2043,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         )
     }
 
+    var effectiveDividerOpacity: CGFloat {
+        appearanceOverride(
+            Keys.dividerOpacity,
+            raw: dividerOpacity,
+            themed: ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.opacity
+        )
+    }
+
     var effectiveDividerImageURL: URL? {
         if isAppearanceOverridden(Keys.dividerImagePath),
            let url = Self.existingFileURL(at: dividerImagePath) {
@@ -1952,6 +2113,36 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             return ThemeColor(r: user.red, g: user.green, b: user.blue)
         }
         if let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.color {
+            return themed
+        }
+        return nil
+    }
+
+    var explicitWindowBorderColor: ThemeColor? {
+        if isAppearanceOverridden(Keys.windowBorderColor), let user = windowBorderColor {
+            return ThemeColor(r: user.red, g: user.green, b: user.blue)
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.window?.borderColor {
+            return themed
+        }
+        return nil
+    }
+
+    var explicitIconShadowColor: ThemeColor? {
+        if isAppearanceOverridden(Keys.iconShadowColor), let user = iconShadowColor {
+            return ThemeColor(r: user.red, g: user.green, b: user.blue)
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.iconShadow?.color {
+            return themed
+        }
+        return nil
+    }
+
+    var explicitDividerColor: ThemeColor? {
+        if isAppearanceOverridden(Keys.dividerColor), let user = dividerColor {
+            return ThemeColor(r: user.red, g: user.green, b: user.blue)
+        }
+        if let themed = ThemeManager.shared.activeManifest?.appearance.indicators?.divider?.color {
             return themed
         }
         return nil
@@ -2252,6 +2443,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let dividerPaddingFraction = "docky.dividerPaddingFraction"
         static let dividerImageScale = "docky.dividerImageScale"
         static let dividerOffset = "docky.dividerOffset"
+        static let dividerOpacity = "docky.dividerOpacity"
+        static let dividerColor = "docky.dividerColor"
+        static let windowBorderColor = "docky.windowBorderColor"
+        static let windowBorderWidth = "docky.windowBorderWidth"
+        static let iconShadowColor = "docky.iconShadowColor"
+        static let iconShadowRadius = "docky.iconShadowRadius"
+        static let iconShadowOpacity = "docky.iconShadowOpacity"
         static let appIconOverrides = "docky.appIconOverrides"
         static let trashIconOverrides = "docky.trashIconOverrides"
         static let folderIconOverrides = "docky.folderIconOverrides"
@@ -2326,6 +2524,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let dividerPaddingFraction: CGFloat = 0.25
         static let dividerImageScale: CGFloat = 1
         static let dividerOffset: CGFloat = 0
+        static let dividerOpacity: CGFloat = 1
+        static let dividerColor: DockColor? = nil
+        static let windowBorderColor: DockColor? = nil
+        static let windowBorderWidth: CGFloat = 1
+        static let iconShadowColor: DockColor? = nil
+        static let iconShadowRadius: CGFloat = 4
+        static let iconShadowOpacity: CGFloat = 0.5
         static let appIconOverrides: [AppIconOverride] = []
         static let trashIconOverrides: [TrashIconOverride] = []
         static let folderIconOverrides: [FolderIconOverride] = []
@@ -2398,6 +2603,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         let storedDividerPaddingFraction = defaults.object(forKey: Keys.dividerPaddingFraction) as? Double
         let storedDividerImageScale = defaults.object(forKey: Keys.dividerImageScale) as? Double
         let storedDividerOffset = defaults.object(forKey: Keys.dividerOffset) as? Double
+        let storedDividerOpacity = defaults.object(forKey: Keys.dividerOpacity) as? Double
+        let storedDividerColor = defaults.data(forKey: Keys.dividerColor)
+        let storedWindowBorderColor = defaults.data(forKey: Keys.windowBorderColor)
+        let storedWindowBorderWidth = defaults.object(forKey: Keys.windowBorderWidth) as? Double
+        let storedIconShadowColor = defaults.data(forKey: Keys.iconShadowColor)
+        let storedIconShadowRadius = defaults.object(forKey: Keys.iconShadowRadius) as? Double
+        let storedIconShadowOpacity = defaults.object(forKey: Keys.iconShadowOpacity) as? Double
         let storedAppIconOverrides = defaults.data(forKey: Keys.appIconOverrides)
         let storedTrashIconOverrides = defaults.data(forKey: Keys.trashIconOverrides)
         let storedFolderIconOverrides = defaults.data(forKey: Keys.folderIconOverrides)
@@ -2474,6 +2686,13 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.dividerPaddingFraction = min(max(storedDividerPaddingFraction.map { CGFloat($0) } ?? DefaultValues.dividerPaddingFraction, 0), 0.5)
         self.dividerImageScale = max(0.25, storedDividerImageScale.map { CGFloat($0) } ?? DefaultValues.dividerImageScale)
         self.dividerOffset = storedDividerOffset.map { CGFloat($0) } ?? DefaultValues.dividerOffset
+        self.dividerOpacity = min(max(storedDividerOpacity.map { CGFloat($0) } ?? DefaultValues.dividerOpacity, 0), 1)
+        self.dividerColor = Self.decodeColor(from: storedDividerColor) ?? DefaultValues.dividerColor
+        self.windowBorderColor = Self.decodeColor(from: storedWindowBorderColor) ?? DefaultValues.windowBorderColor
+        self.windowBorderWidth = max(0, storedWindowBorderWidth.map { CGFloat($0) } ?? DefaultValues.windowBorderWidth)
+        self.iconShadowColor = Self.decodeColor(from: storedIconShadowColor) ?? DefaultValues.iconShadowColor
+        self.iconShadowRadius = max(0, storedIconShadowRadius.map { CGFloat($0) } ?? DefaultValues.iconShadowRadius)
+        self.iconShadowOpacity = min(max(storedIconShadowOpacity.map { CGFloat($0) } ?? DefaultValues.iconShadowOpacity, 0), 1)
         self.appIconOverrides = Self.decodeAppIconOverrides(from: storedAppIconOverrides) ?? DefaultValues.appIconOverrides
         self.trashIconOverrides = Self.decodeTrashIconOverrides(from: storedTrashIconOverrides) ?? DefaultValues.trashIconOverrides
         self.folderIconOverrides = Self.decodeFolderIconOverrides(from: storedFolderIconOverrides) ?? DefaultValues.folderIconOverrides
@@ -2578,6 +2797,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         dividerPaddingFraction = DefaultValues.dividerPaddingFraction
         dividerOffset = DefaultValues.dividerOffset
         dividerImageScale = DefaultValues.dividerImageScale
+        dividerOpacity = DefaultValues.dividerOpacity
+        dividerColor = DefaultValues.dividerColor
 
         // Tile Layout (system tile size + magnification live on
         // DockSettingsService and aren't reset here)
@@ -2585,9 +2806,16 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         tileVerticalPadding = DefaultValues.tileVerticalPadding
         tileSpacing = DefaultValues.tileSpacing
 
+        // Icon Shadow (lives next to Tile Layout in the UI)
+        iconShadowColor = DefaultValues.iconShadowColor
+        iconShadowRadius = DefaultValues.iconShadowRadius
+        iconShadowOpacity = DefaultValues.iconShadowOpacity
+
         // Window Shape
         windowClipShape = DefaultValues.windowClipShape
         windowCornerRadius = DefaultValues.windowCornerRadius
+        windowBorderColor = DefaultValues.windowBorderColor
+        windowBorderWidth = DefaultValues.windowBorderWidth
 
         // Window Background
         windowBackgroundImagePath = DefaultValues.windowBackgroundImagePath
@@ -2651,6 +2879,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         dividerPaddingFraction = DefaultValues.dividerPaddingFraction
         dividerImageScale = DefaultValues.dividerImageScale
         dividerOffset = DefaultValues.dividerOffset
+        dividerOpacity = DefaultValues.dividerOpacity
         appIconOverrides = DefaultValues.appIconOverrides
         trashIconOverrides = DefaultValues.trashIconOverrides
         folderIconOverrides = DefaultValues.folderIconOverrides
@@ -2765,6 +2994,22 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
 
         defaults.set(data, forKey: Keys.activeIndicatorColor)
+    }
+
+    /// Generic persistence helper for `DockColor?` defaults. Used by
+    /// the newer optional-color fields (border, icon shadow, divider)
+    /// so each one doesn't need its own dedicated `persist…Color`
+    /// function.
+    private func persistOptionalColor(_ color: DockColor?, forKey key: String) {
+        guard let color else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        guard let data = try? encoder.encode(color) else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        defaults.set(data, forKey: key)
     }
 
     private func persistAppIconOverrides(_ overrides: [AppIconOverride]) {

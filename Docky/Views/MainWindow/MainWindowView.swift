@@ -59,7 +59,18 @@ struct MainWindowView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
-                if !preferences.effectiveDisablesGlassLook {
+                // Theme border, when set, takes precedence over the
+                // default glass stroke. When no theme border is set
+                // and glass isn't disabled, we draw the gradient
+                // outline that lives with the dock chrome.
+                if let themeBorder = preferences.effectiveWindowBorderColor {
+                    let width = max(0, preferences.effectiveWindowBorderWidth)
+                    if width > 0 {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .inset(by: width / 2)
+                            .strokeBorder(Color(nsColor: themeBorder), lineWidth: width)
+                    }
+                } else if !preferences.effectiveDisablesGlassLook {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .inset(by: borderWidth / 2)
                         .strokeBorder(borderGradient, lineWidth: borderWidth)

@@ -54,6 +54,10 @@ struct ThemeAppearance: Codable, Equatable {
     var tile: ThemeTile?
     var window: ThemeWindow?
     var indicators: ThemeIndicators?
+    /// Optional drop shadow applied behind every icon-bearing tile
+    /// (apps, app folders, trash, launchpad, etc.). When `color` is
+    /// nil no shadow renders regardless of the other fields.
+    var iconShadow: ThemeShadow?
 }
 
 struct ThemeTile: Codable, Equatable {
@@ -73,6 +77,12 @@ struct ThemeWindow: Codable, Equatable {
     var backgroundImageMode: String?
     var tintColor: ThemeColor?
     var tintOpacity: CGFloat?
+    /// Optional outline color drawn around the chrome's clip shape.
+    /// When `nil` the default glass border (or no border, when glass
+    /// is disabled) is preserved.
+    var borderColor: ThemeColor?
+    /// Stroke width in points. Ignored when `borderColor` is nil.
+    var borderWidth: CGFloat?
 }
 
 struct ThemeIndicators: Codable, Equatable {
@@ -98,6 +108,19 @@ struct ThemeDivider: Codable, Equatable {
     var paddingFraction: CGFloat?
     var offset: CGFloat?
     var imageScale: CGFloat?
+    var opacity: CGFloat?
+    /// Flat-color fill used when no divider image is supplied. When
+    /// `nil` the divider falls back to SwiftUI's `.primary` color.
+    var color: ThemeColor?
+}
+
+/// Color + radius + opacity triple. Used by `ThemeAppearance.iconShadow`
+/// and easy to repurpose for any other drop-shadow appearance field
+/// (e.g. text shadow, window shadow) without inventing another schema.
+struct ThemeShadow: Codable, Equatable {
+    var color: ThemeColor?
+    var radius: CGFloat?
+    var opacity: CGFloat?
 }
 
 struct ThemeColor: Codable, Equatable {

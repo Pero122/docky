@@ -420,13 +420,19 @@ import Observation
         let leftDividerAsset = copier.copyIfPresent(prefs.effectiveLeftDividerImageURL)
         let rightDividerAsset = copier.copyIfPresent(prefs.effectiveRightDividerImageURL)
 
+        let borderColor = prefs.explicitWindowBorderColor
         let window = ThemeWindow(
             clipShape: prefs.effectiveWindowClipShape.rawValue,
             cornerRadius: prefs.effectiveWindowCornerRadius,
             backgroundImage: backgroundAsset,
             backgroundImageMode: prefs.effectiveWindowBackgroundImageMode.rawValue,
             tintColor: prefs.explicitWindowTintColor,
-            tintOpacity: prefs.effectiveWindowTintOpacity
+            tintOpacity: prefs.effectiveWindowTintOpacity,
+            borderColor: borderColor,
+            // Only ship the width when a color is set — otherwise the
+            // recipient would see "no border" + a stale width, which
+            // serializes noise without affecting render.
+            borderWidth: borderColor == nil ? nil : prefs.effectiveWindowBorderWidth
         )
 
         let divider = ThemeDivider(
@@ -436,7 +442,9 @@ import Observation
             mirrorLeftOnRight: prefs.effectiveMirrorsLeftDividerOnRight,
             paddingFraction: prefs.effectiveDividerPaddingFraction,
             offset: prefs.effectiveDividerOffset,
-            imageScale: prefs.effectiveDividerImageScale
+            imageScale: prefs.effectiveDividerImageScale,
+            opacity: prefs.effectiveDividerOpacity,
+            color: prefs.explicitDividerColor
         )
 
         let indicators = ThemeIndicators(
@@ -448,6 +456,15 @@ import Observation
             divider: divider
         )
 
+        let shadowColor = prefs.explicitIconShadowColor
+        let iconShadow: ThemeShadow? = shadowColor.map { color in
+            ThemeShadow(
+                color: color,
+                radius: prefs.effectiveIconShadowRadius,
+                opacity: prefs.effectiveIconShadowOpacity
+            )
+        }
+
         let appearance = ThemeAppearance(
             disablesGlassLook: prefs.effectiveDisablesGlassLook,
             tile: ThemeTile(
@@ -456,7 +473,8 @@ import Observation
                 spacing: prefs.effectiveTileSpacing
             ),
             window: window,
-            indicators: indicators
+            indicators: indicators,
+            iconShadow: iconShadow
         )
 
         return ThemeManifest(

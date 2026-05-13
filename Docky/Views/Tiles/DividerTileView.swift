@@ -89,19 +89,26 @@ struct DividerTileView: View {
     private func divider(globalFrame: CGRect) -> some View {
         let positionClass = positionClass(globalFrame: globalFrame)
 
-        if let resolvedImage = preferences.resolvedDividerImage(forPositionClass: positionClass),
-           let nsImage = NSImage(contentsOf: resolvedImage.url) {
-            customImageDivider(nsImage: nsImage, mirrored: resolvedImage.mirrored)
-        } else if position.isVertical {
-            Rectangle()
-                .fill(.primary)
-                .frame(height: 1)
-        } else {
-            Rectangle()
-                .fill(.primary)
-                .frame(width: 1)
-                .padding(.vertical, lineInset)
+        // Flat divider color falls through user → theme → `.primary`.
+        let fillColor: Color = preferences.effectiveDividerColor
+            .map(Color.init(nsColor:)) ?? Color.primary
+
+        Group {
+            if let resolvedImage = preferences.resolvedDividerImage(forPositionClass: positionClass),
+               let nsImage = NSImage(contentsOf: resolvedImage.url) {
+                customImageDivider(nsImage: nsImage, mirrored: resolvedImage.mirrored)
+            } else if position.isVertical {
+                Rectangle()
+                    .fill(fillColor)
+                    .frame(height: 1)
+            } else {
+                Rectangle()
+                    .fill(fillColor)
+                    .frame(width: 1)
+                    .padding(.vertical, lineInset)
+            }
         }
+        .opacity(min(max(preferences.effectiveDividerOpacity, 0), 1))
     }
 
     @ViewBuilder

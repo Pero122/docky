@@ -428,6 +428,21 @@ struct TileView: View {
         (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
     }
 
+    /// Effective drop shadow applied behind the tile's icon content.
+    /// Returns `Color.clear` when no shadow color is set — combined
+    /// with a 0 radius below, that makes `.shadow(...)` a true no-op.
+    private var iconShadowColor: Color {
+        guard let nsColor = preferences.effectiveIconShadowColor else {
+            return Color.clear
+        }
+        return Color(nsColor: nsColor)
+            .opacity(preferences.effectiveIconShadowOpacity)
+    }
+
+    private var iconShadowRadius: CGFloat {
+        preferences.effectiveIconShadowColor == nil ? 0 : preferences.effectiveIconShadowRadius
+    }
+
     var body: some View {
         #if DEBUG
         let _ = Self._printChanges()
@@ -438,6 +453,7 @@ struct TileView: View {
 
     private var tileBody: some View {
         laidOutContent
+            .shadow(color: iconShadowColor, radius: iconShadowRadius)
             .opacity(tileBodyOpacity)
             .brightness(pressDarkenAmount)
             .animation(.easeInOut(duration: 0.12), value: pressDarkenSignal)
