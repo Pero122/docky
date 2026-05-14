@@ -146,7 +146,7 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
 
     nonisolated static let allItems: [DockEditorGalleryItem] = WidgetCatalog.paletteRegistrations.map(Self.makeWidgetItem)
         + [makeSmartStackItem()]
-        + [makeUtilityItem(.launchpad), makeUtilityItem(.spacer), makeUtilityItem(.divider)]
+        + [makeUtilityItem(.launchpad), makeUtilityItem(.spacer), makeUtilityItem(.flexibleSpacer), makeUtilityItem(.divider)]
 
     nonisolated private static func makeWidgetItem(registration: WidgetRegistration) -> Self {
         let paletteItem = DockEditPaletteItem.widget(
@@ -218,6 +218,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             String(localized: "Launchpad")
         case .spacer:
             String(localized: "Spacer")
+        case .flexibleSpacer:
+            String(localized: "Flexible Spacer")
         case .divider:
             String(localized: "Divider")
         case .widget(_, let kind):
@@ -233,6 +235,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             String(localized: "Shows a fullscreen launcher with all installed apps on a blurred backdrop.")
         case .spacer:
             String(localized: "Adds breathing room between pinned tiles or folders.")
+        case .flexibleSpacer:
+            String(localized: "Stretches to absorb leftover space when the dock spans the full screen axis.")
         case .divider:
             String(localized: "Adds a visual separator to break up sections in the dock.")
         case .widget(_, let kind):
@@ -258,6 +262,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             String(localized: "Shows the currently playing media with quick playback control.")
         case .weather:
             String(localized: "Shows current weather for your location.")
+        case .search:
+            String(localized: "Search the web — click to open Google in your default browser.")
         }
     }
 
@@ -267,6 +273,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             "square.grid.3x3.fill"
         case .spacer:
             "rectangle.split.3x1"
+        case .flexibleSpacer:
+            "arrow.left.and.right"
         case .divider:
             "line.3.horizontal.decrease"
         case .widget(_, let kind):
@@ -283,6 +291,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
                 "waveform"
             case .weather:
                 "cloud.sun.fill"
+            case .search:
+                "magnifyingglass"
             }
         case .smartStack:
             "square.stack.3d.up"
@@ -919,6 +929,9 @@ private struct DockEditorItemPreview: View {
             case .spacer:
                 DockEditorUtilityPreview(kind: .spacer, scale: scale)
                     .frame(width: previewSize.width, height: previewSize.height)
+            case .flexibleSpacer:
+                DockEditorUtilityPreview(kind: .flexibleSpacer, scale: scale)
+                    .frame(width: previewSize.width, height: previewSize.height)
             case .divider:
                 DockEditorUtilityPreview(kind: .divider, scale: scale)
                     .frame(width: previewSize.width, height: previewSize.height)
@@ -944,7 +957,7 @@ private struct DockEditorItemPreview: View {
                 width: max(scale.tileSize + scale.tileSpacing, scale.tileHeight) * span,
                 height: scale.tileHeight
             )
-        case .spacer, .divider:
+        case .spacer, .flexibleSpacer, .divider:
             return CGSize(width: scale.utilityWidth, height: scale.tileHeight)
         }
     }
@@ -953,6 +966,7 @@ private struct DockEditorItemPreview: View {
 private struct DockEditorUtilityPreview: View {
     enum Kind {
         case spacer
+        case flexibleSpacer
         case divider
     }
 
@@ -968,6 +982,19 @@ private struct DockEditorUtilityPreview: View {
                 RoundedRectangle(cornerRadius: scale.tileHeight * 0.24, style: .continuous)
                     .stroke(.primary.opacity(0.32), style: StrokeStyle(lineWidth: 2, dash: [5, 6]))
                     .frame(width: scale.tileHeight * 0.78, height: scale.tileHeight * 0.78)
+            case .flexibleSpacer:
+                // Arrows pointing outward signal "stretches to fill leftover
+                // space" — distinguishes it from the fixed dashed-box spacer.
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.left")
+                    Rectangle()
+                        .fill(.primary.opacity(0.28))
+                        .frame(height: 1)
+                    Image(systemName: "arrow.right")
+                }
+                .font(.system(size: scale.tileHeight * 0.32, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.45))
+                .frame(width: scale.tileHeight * 1.4, height: scale.tileHeight * 0.78)
             case .divider:
                 Rectangle()
                     .fill(.primary.opacity(0.28))

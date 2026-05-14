@@ -99,7 +99,7 @@ struct TileView: View {
                     })
                 }
                 return actions
-            case .minimizedWindow, .appFolder, .widget, .smartStack, .spacer, .divider:
+            case .minimizedWindow, .appFolder, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
                 break
             }
         }
@@ -168,7 +168,7 @@ struct TileView: View {
                     }
                 }
             ]
-        case .spacer, .divider:
+        case .spacer, .flexibleSpacer, .divider:
             return customDockyTileActions
         }
     }
@@ -254,6 +254,13 @@ struct TileView: View {
         ]
 
         if case .spacer = tile.content {
+            actions.append(.divider)
+            actions.append(.action(String(localized: "Remove from Dock")) {
+                removeDockyTile()
+            })
+        }
+
+        if case .flexibleSpacer = tile.content {
             actions.append(.divider)
             actions.append(.action(String(localized: "Remove from Dock")) {
                 removeDockyTile()
@@ -354,7 +361,7 @@ struct TileView: View {
         case .smartStack:
             let feature = ProductFeature.smartStack
             return product.availability(for: feature, context: .existingPlacement) == .lockedExisting ? feature : nil
-        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .divider, .trash:
+        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .flexibleSpacer, .divider, .trash:
             return nil
         }
     }
@@ -376,7 +383,7 @@ struct TileView: View {
         switch tile.content {
         case .app, .appFolder, .folder, .trash:
             return true
-        case .minimizedWindow, .spacer, .divider, .launchpad, .widget, .smartStack:
+        case .minimizedWindow, .spacer, .flexibleSpacer, .divider, .launchpad, .widget, .smartStack:
             return false
         }
     }
@@ -424,7 +431,7 @@ struct TileView: View {
                     removeDockyTile()
                 })
             }
-        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .divider, .trash:
+        case .app, .minimizedWindow, .appFolder, .folder, .spacer, .flexibleSpacer, .divider, .trash:
             break
         }
 
@@ -461,8 +468,23 @@ struct TileView: View {
     }
 
     private var hasHoverBackground: Bool {
-        preferences.effectiveTileHoverBackgroundImageURL != nil
+        guard supportsHoverBackground else { return false }
+        return preferences.effectiveTileHoverBackgroundImageURL != nil
             || preferences.effectiveTileHoverBackgroundColor != nil
+    }
+
+    /// Only "tappable" tiles (icons that act like apps or files) get
+    /// the hover treatment. Widgets, smart stacks, and structural
+    /// fixtures (dividers, spacers) stay flat — a hover halo on a
+    /// widget reads as a misfire.
+    private var supportsHoverBackground: Bool {
+        switch tile.content {
+        case .app, .appFolder, .folder, .trash, .launchpad:
+            true
+        case .widget, .smartStack, .divider, .spacer, .flexibleSpacer,
+             .minimizedWindow:
+            false
+        }
     }
 
     /// Background drawn under the *foreground* (frontmost) app's tile.
@@ -504,7 +526,7 @@ struct TileView: View {
             return folder.apps.contains { app in
                 workspace.isFrontmost(bundleIdentifier: app.bundleIdentifier)
             }
-        case .folder, .launchpad, .widget, .smartStack, .spacer, .divider, .trash, .minimizedWindow:
+        case .folder, .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider, .trash, .minimizedWindow:
             return false
         }
     }
@@ -536,7 +558,7 @@ struct TileView: View {
         laidOutContent
             // Icon-only padding: shrinks the rendered icon without
             // touching the tile's layout box. Sized per theme/user.
-            .padding(layout.scaled(preferences.effectiveTileIconPadding))
+            .padding(appliedTileIconPadding)
             .scaleEffect(isHovering ? preferences.effectiveTileHoverScale : 1)
             .shadow(color: iconShadowColor, radius: iconShadowRadius)
             .opacity(tileBodyOpacity * (isHovering ? preferences.effectiveTileHoverOpacity : 1))
@@ -717,7 +739,7 @@ struct TileView: View {
             displayedContent
                 .padding(contentPaddingEdges, contentPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .app, .minimizedWindow, .spacer, .divider:
+        case .app, .minimizedWindow, .spacer, .flexibleSpacer, .divider:
             displayedContent
                 .background(appFolderDropTargetBackdrop)
                 .padding(contentPaddingEdges, contentPadding)
@@ -774,7 +796,7 @@ struct TileView: View {
             folder.apps.contains { app in
                 workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
             }
-        case .launchpad, .widget, .smartStack, .folder, .spacer, .divider, .trash:
+        case .launchpad, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
             false
         }
     }
@@ -893,13 +915,49 @@ struct TileView: View {
     }
 
     private var nonAppContentPadding: CGFloat {
+        // Per-span widget override wins for widget-hosting tiles —
+        // a theme/user can collapse padding to 0 on 2x/3x widgets for
+        // an edge-to-edge taskbar look without touching 1x.
+        if let span = widgetRenderedSpan,
+           let override = preferences.effectiveWidgetContentPadding(for: span) {
+            return override
+        }
         switch tile.content {
         case .app(let app) where app.displayedWidget != nil:
-            tileChromeInset
+            return tileChromeInset
         case .appFolder, .widget, .smartStack, .folder, .trash:
-            tileChromeInset
-        case .app, .launchpad, .minimizedWindow, .spacer, .divider:
-            0
+            return tileChromeInset
+        case .app, .launchpad, .minimizedWindow, .spacer, .flexibleSpacer, .divider:
+            return 0
+        }
+    }
+
+    /// Resolved tile icon padding. Widget tiles whose span opts out
+    /// (via the theme's `ignoresAddedPaddings` escape hatch) collapse
+    /// to zero so the widget can fill its tile box — needed when a
+    /// theme adds icon padding for chunky app tiles but wants 2x/3x
+    /// widgets edge-to-edge.
+    private var appliedTileIconPadding: CGFloat {
+        if let span = widgetRenderedSpan,
+           preferences.effectiveWidgetIgnoresAddedPaddings(for: span) {
+            return 0
+        }
+        return layout.scaled(preferences.effectiveTileIconPadding)
+    }
+
+    /// Returns the widget's *rendered* span (compressed to .one when
+    /// overflow compaction or vertical orientation forces it) for any
+    /// tile that hosts a widget. `nil` for non-widget tiles.
+    private var widgetRenderedSpan: TileSpan? {
+        switch tile.content {
+        case .widget(let widget):
+            return renderedWidgetSpan(for: widget.effectiveSpan)
+        case .smartStack(let stack):
+            return renderedWidgetSpan(for: stack.span)
+        case .app(let app) where app.displayedWidget != nil:
+            return renderedWidgetSpan(for: app.displayedWidget?.effectiveSpan ?? .one)
+        default:
+            return nil
         }
     }
 
@@ -932,6 +990,13 @@ struct TileView: View {
 
     private var nonAppTileCornerRadius: CGFloat {
         let maximumCornerRadius = max(0, (effectiveTileSize - nonAppContentPadding * 2) / 2)
+        // Per-span override wins for widget tiles. Clamp to the
+        // maximum so a theme that sets `cornerRadius: 999` doesn't
+        // produce a malformed clip when the tile is small.
+        if let span = widgetRenderedSpan,
+           let override = preferences.effectiveWidgetCornerRadius(for: span) {
+            return min(override, maximumCornerRadius)
+        }
         return preferences.effectiveTileClipShape.resolvedCornerRadius(
             base: effectiveTileSize * 0.225,
             maximum: maximumCornerRadius
@@ -1074,7 +1139,7 @@ struct TileView: View {
                 ),
                 isOpen: isFolderPopoverPresented,
             )
-        case .spacer:
+        case .spacer, .flexibleSpacer:
             SpacerTileView()
         case .divider:
             DividerTileView(tileID: tile.id)
@@ -1101,7 +1166,7 @@ struct TileView: View {
             folder.displayName
         case .trash:
             "Trash"
-        case .spacer, .divider:
+        case .spacer, .flexibleSpacer, .divider:
             nil
         }
     }
@@ -1197,14 +1262,17 @@ struct TileView: View {
     }
 
     private var expandableWidget: WidgetTile? {
+        let candidate: WidgetTile?
         switch tile.content {
         case .widget(let widget):
-            return widget
+            candidate = widget
         case .app(let app) where app.displayedWidget != nil:
-            return app.displayedWidget
+            candidate = app.displayedWidget
         default:
-            return nil
+            candidate = nil
         }
+        guard let candidate, candidate.kind.isExpandable else { return nil }
+        return candidate
     }
 
     private var expandableWidgetRenderedSpan: TileSpan {
@@ -1368,7 +1436,7 @@ struct TileView: View {
             Task {
                 _ = await AppleScriptService.shared.openTrash()
             }
-        case .spacer, .divider:
+        case .spacer, .flexibleSpacer, .divider:
             return
         }
     }
@@ -1873,6 +1941,20 @@ struct TileView: View {
             actions.append(.divider)
             actions.append(widgetRemovalAction(for: widget))
             return actions
+        case .search:
+            var actions: [ContextAction] = []
+            if let spanMenuAction = widgetSpanMenuAction(for: widget) {
+                actions.append(spanMenuAction)
+                actions.append(.divider)
+            }
+            actions.append(.action(String(localized: "Open Google")) {
+                if let url = URL(string: "https://www.google.com") {
+                    NSWorkspace.shared.open(url)
+                }
+            })
+            actions.append(.divider)
+            actions.append(widgetRemovalAction(for: widget))
+            return actions
         }
     }
 
@@ -2016,6 +2098,14 @@ struct TileView: View {
             }
         case .weather:
             WeatherService.shared.openInWeatherApp()
+        case .search:
+            // 2x / 3x widgets render an inline text field — clicks there
+            // should focus the field, not open Google. Only the 1x form
+            // (no text input fits) acts as a one-click Google launcher.
+            if widget.effectiveSpan == .one,
+               let url = URL(string: "https://www.google.com") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 

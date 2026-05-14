@@ -12,6 +12,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case appearanceTileLayout
     case appearanceWindowShape
     case appearanceWindowBackground
+    case appearanceWidgets
     case appearanceThemes
     case appIcons
     case behaviorGeneral
@@ -39,6 +40,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: "Tile Layout"
         case .appearanceWindowShape: "Window Shape"
         case .appearanceWindowBackground: "Window Background"
+        case .appearanceWidgets: "Widgets"
         case .appearanceThemes: "Themes"
         case .appIcons: "App Icons"
         case .behaviorGeneral: "General"
@@ -66,6 +68,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: "square.grid.3x3"
         case .appearanceWindowShape: "rectangle.dashed"
         case .appearanceWindowBackground: "rectangle.fill"
+        case .appearanceWidgets: "puzzlepiece.extension.fill"
         case .appearanceThemes: "paintpalette"
         case .appIcons: "app.badge"
         case .behaviorGeneral: "slider.horizontal.3"
@@ -93,6 +96,7 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .appearanceTileLayout: .orange
         case .appearanceWindowShape: .indigo
         case .appearanceWindowBackground: .blue
+        case .appearanceWidgets: .purple
         case .appearanceThemes: .pink
         case .appIcons: .pink
         case .behaviorGeneral: .gray
@@ -137,6 +141,7 @@ private let settingsSections: [SettingsSection] = [
         .appearanceTileLayout,
         .appearanceWindowShape,
         .appearanceWindowBackground,
+        .appearanceWidgets,
         .appIcons
     ]),
     SettingsSection(id: "behavior", title: "Behavior", panes: [
@@ -256,6 +261,8 @@ private struct SettingsDetailView: View {
             AppearanceSettingsView(subsection: .windowShape)
         case .appearanceWindowBackground:
             AppearanceSettingsView(subsection: .windowBackground)
+        case .appearanceWidgets:
+            AppearanceSettingsView(subsection: .widgets)
         case .appearanceThemes:
             ThemesSettingsView()
         case .appIcons:

@@ -110,7 +110,7 @@ final class PinnedDockSmartOrganizerService {
                         displayName: appDisplayName(for: bundleIdentifier)
                     ))
                 }
-            case .launchpad, .widget, .smartStack, .spacer, .divider:
+            case .launchpad, .widget, .smartStack, .spacer, .flexibleSpacer, .divider:
                 continue
             }
         }
@@ -458,11 +458,14 @@ final class PinnedDockSmartOrganizerService {
 
         for item in items {
             switch item.kind {
-            case .divider, .spacer:
+            case .divider, .spacer, .flexibleSpacer:
                 guard !result.isEmpty else {
                     continue
                 }
-                guard let lastItem = result.last, lastItem.kind != .divider, lastItem.kind != .spacer else {
+                guard let lastItem = result.last,
+                      lastItem.kind != .divider,
+                      lastItem.kind != .spacer,
+                      lastItem.kind != .flexibleSpacer else {
                     continue
                 }
                 result.append(item)
@@ -471,7 +474,8 @@ final class PinnedDockSmartOrganizerService {
             }
         }
 
-        while let lastItem = result.last, lastItem.kind == .divider || lastItem.kind == .spacer {
+        while let lastItem = result.last,
+              lastItem.kind == .divider || lastItem.kind == .spacer || lastItem.kind == .flexibleSpacer {
             result.removeLast()
         }
 

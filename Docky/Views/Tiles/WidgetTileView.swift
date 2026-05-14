@@ -73,6 +73,15 @@ struct WidgetTileView: View {
                 isExpanded: isExpanded,
                 isExpandedPreviewOpen: isExpandedPreviewOpen
             )
+        case .search:
+            SearchWidgetTileView(
+                tile: tile,
+                cornerRadius: cornerRadius,
+                renderedSpan: renderedSpan,
+                isWithinStack: isWithinStack,
+                isExpanded: isExpanded,
+                isExpandedPreviewOpen: isExpandedPreviewOpen
+            )
         }
     }
 }

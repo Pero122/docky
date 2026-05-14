@@ -24,6 +24,7 @@ enum TileContent: Equatable {
     case smartStack(SmartStackTile)
     case folder(FolderTile)
     case spacer
+    case flexibleSpacer
     case divider
     case trash
 }
@@ -90,6 +91,7 @@ enum WidgetKind: String, CaseIterable, Codable, Identifiable {
     case systemStatus
     case nowPlaying
     case weather
+    case search
 
     var id: String { rawValue }
 
@@ -109,6 +111,8 @@ enum WidgetKind: String, CaseIterable, Codable, Identifiable {
             String(localized: "Now Playing")
         case .weather:
             String(localized: "Weather")
+        case .search:
+            String(localized: "Search")
         }
     }
 
@@ -116,7 +120,7 @@ enum WidgetKind: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .calendarDate:
             [.one]
-        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather:
+        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather, .search:
             TileSpan.allCases
         }
     }
@@ -125,8 +129,22 @@ enum WidgetKind: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .nowPlaying:
             WidgetExpansionExtent(widthTiles: 5, heightTiles: 2)
-        case .calendar, .calendarDate, .reminders, .batteries, .systemStatus, .weather:
+        case .calendar, .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search:
             .standard
+        }
+    }
+
+    /// Whether hovering this widget triggers the larger preview window
+    /// after the dwell delay. Defaults to `true` for widgets that have
+    /// genuine extra content at expanded size. Widgets whose 1x/2x/3x
+    /// representation IS the full thing (search field, calendar date)
+    /// stay inline.
+    nonisolated var isExpandable: Bool {
+        switch self {
+        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather:
+            true
+        case .calendarDate, .search:
+            false
         }
     }
 }

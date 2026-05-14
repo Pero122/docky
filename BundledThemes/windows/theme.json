@@ -7,7 +7,14 @@
   "description": "Flat, dark Windows 10 taskbar look: sharp-cornered chrome with a near-opaque charcoal fill, no glass, tight tile spacing, and a thin accent-blue running-app pill at the bottom edge.",
   "behavior": {
     "windowAxisSizing": "fullAxis",
-    "tileSize": 44
+    "tileSize": 44,
+    "showsActivePinnedSeparator": false
+  },
+  "layout": {
+    "insertions": [
+      { "kind": "search", "span": 3, "after": "pinned:com.apple.finder" },
+      { "kind": "flexibleSpacer", "after": "divider:trailing" }
+    ]
   },
   "appearance": {
     "disablesGlassLook": true,
@@ -42,6 +49,10 @@
         "backgroundColor": { "name": "white" },
         "backgroundOpacity": 0.06
       }
+    },
+    "widgets": {
+      "twoX": { "contentPadding": 0, "cornerRadius": 0, "ignoresAddedPaddings": true },
+      "threeX": { "contentPadding": 0, "cornerRadius": 0, "ignoresAddedPaddings": true }
     },
     "window": {
       "clipShape": "rounded",

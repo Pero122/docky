@@ -12,6 +12,7 @@ enum WidgetOwnerBundleIdentifiers {
     static let systemStatus = "gt.quintero.Docky.system-status"
     static let weather = "gt.quintero.Docky.weather"
     static let genericNowPlaying = "gt.quintero.Docky.now-playing"
+    static let search = "gt.quintero.Docky.search"
 }
 
 struct WidgetRegistration: Equatable, Identifiable {
@@ -93,6 +94,17 @@ enum WidgetCatalog {
         includesInSmartStack: false
     )
 
+    static let search = WidgetRegistration(
+        kind: .search,
+        ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.search,
+        defaultSpan: .two,
+        // Theme-only widget: kept out of the dock editor palette so
+        // it can't be dragged in manually. Themes can still inject it
+        // via `layout.insertions` when widget injection lands.
+        includesInPalette: false,
+        includesInSmartStack: false
+    )
+
     static let staticRegistrations: [WidgetRegistration] = [
         calendar,
         calendarDate,
@@ -101,6 +113,7 @@ enum WidgetCatalog {
         systemStatus,
         weather,
         genericNowPlaying,
+        search,
     ]
 
     static let paletteRegistrations: [WidgetRegistration] = staticRegistrations.filter(\.includesInPalette)

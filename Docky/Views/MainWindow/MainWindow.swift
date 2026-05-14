@@ -163,7 +163,15 @@ final class MainWindowContainerView: NSView {
 /// activating Docky as a foreground app, which would otherwise break
 /// frontmost-tracked behaviors (cycle windows on tile click, hide-on-second-click).
 final class MainWindow: NSPanel {
-    override var canBecomeKey: Bool { false }
+    /// We default to `false` so tile clicks don't bring Docky to the
+    /// foreground (frontmost-tracked behaviors like cycle-on-click rely
+    /// on the previously-frontmost app staying key). Embedded controls
+    /// that need keyboard input — currently only the Search widget's
+    /// 2x/3x text field — set `allowsKeyWindow` to `true` while focused
+    /// so SwiftUI can route keystrokes into them, then flip it back off
+    /// on resign.
+    static var allowsKeyWindow: Bool = false
+    override var canBecomeKey: Bool { Self.allowsKeyWindow }
     override var canBecomeMain: Bool { false }
 
     override var level: NSWindow.Level { get { .mainMenu } set {} }

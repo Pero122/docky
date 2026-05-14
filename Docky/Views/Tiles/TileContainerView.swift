@@ -210,13 +210,28 @@ struct TileContainerView: View {
     private func tileView(for tile: Tile) -> some View {
         let iconSize = magnifiedIconSize(for: tile)
         let size = magnifiedTileFrame(for: tile, iconSize: iconSize)
+        // A flexible spacer's main-axis size is unbounded so the surrounding
+        // HStack/VStack distributes leftover chrome space to it. Its natural
+        // (`size`) extent acts as the minimum so the spacer is still visible
+        // when the dock is content-sized.
+        let isFlexible = tile.content == .flexibleSpacer
+        let isHorizontal = !position.isVertical
         TileView(
             tile: tile,
             isDocumentDropTarget: dockDrag.documentTargetTileID == tile.id,
             isAppFolderDropTarget: draggedAppFolderTargetTileID == tile.id,
             renderedTileSize: iconSize
         )
-            .frame(width: size.width, height: size.height)
+            .frame(
+                minWidth: isFlexible && isHorizontal ? size.width : nil,
+                maxWidth: isFlexible && isHorizontal ? .infinity : nil,
+                minHeight: isFlexible && !isHorizontal ? size.height : nil,
+                maxHeight: isFlexible && !isHorizontal ? .infinity : nil
+            )
+            .frame(
+                width: isFlexible && isHorizontal ? nil : size.width,
+                height: isFlexible && !isHorizontal ? nil : size.height
+            )
             .opacity(isHiddenForActiveDrag(tileID: tile.id) ? 0 : 1)
             .background(alignment: .topLeading) {
                 GeometryReader { proxy in
@@ -319,7 +334,11 @@ struct TileContainerView: View {
             result.append(tile)
         }
 
-        return result
+        // Theme-level layout insertions apply after the editor-preview
+        // merge: applying them in `TileStore.rebuildTiles` would lose
+        // anything anchored past `divider:trailing` because this
+        // method re-builds that section from `previewTrailingSectionTiles`.
+        return TileStore.applyingThemeLayoutInsertions(to: result)
     }
 
     private var pinnedTiles: [Tile] {
@@ -433,6 +452,12 @@ struct TileContainerView: View {
             )
         case .spacer:
             return Tile(id: "editor-preview:spacer", content: .spacer)
+        case .flexibleSpacer:
+            // Render the in-dock drop preview as a fixed-size spacer so the
+            // user has a tile-sized target to land on; the dropped tile is
+            // still persisted as `.flexibleSpacer` via the palette item
+            // factory and stretches once committed.
+            return Tile(id: "editor-preview:flexible-spacer", content: .spacer)
         case .divider:
             return Tile(id: "editor-preview:divider", content: .divider)
         case .widget(let ownerBundleIdentifier, let kind):
@@ -786,7 +811,7 @@ struct TileContainerView: View {
             return effectiveEdgePadding
         }
 
-        if preferences.showsActivePinnedSeparator, section.id == "primary" {
+        if preferences.effectiveShowsActivePinnedSeparator, section.id == "primary" {
             return effectiveTileSize * 0.25
         }
 
@@ -923,7 +948,7 @@ struct TileContainerView: View {
                 return effectiveWidgetSpan(widget.span) == .one
             }
             return true
-        case .folder, .trash, .appFolder, .minimizedWindow, .launchpad, .spacer:
+        case .folder, .trash, .appFolder, .minimizedWindow, .launchpad, .spacer, .flexibleSpacer:
             return true
         case .widget(let widget):
             return effectiveWidgetSpan(widget.span) == .one
@@ -1149,7 +1174,7 @@ struct TileContainerView: View {
             return isPinnedReorderable(tileID: tile.id)
         case .widget, .smartStack:
             return isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id)
-        case .launchpad, .spacer, .divider:
+        case .launchpad, .spacer, .flexibleSpacer, .divider:
             return editMode.isActive && (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id))
         case .folder, .trash:
             return editMode.isActive && isTrailingReorderable(tileID: tile.id)
@@ -1180,6 +1205,8 @@ struct TileContainerView: View {
             PinnedTileItem.launchpad()
         case .spacer:
             PinnedTileItem.spacer()
+        case .flexibleSpacer:
+            PinnedTileItem.flexibleSpacer()
         case .divider:
             PinnedTileItem.divider()
         case .widget(let ownerBundleIdentifier, let kind):
@@ -1213,6 +1240,8 @@ struct TileContainerView: View {
             nil
         case .spacer:
             TrailingTileItem.spacer()
+        case .flexibleSpacer:
+            TrailingTileItem.flexibleSpacer()
         case .divider:
             TrailingTileItem.divider()
         case .widget(let ownerBundleIdentifier, let kind):
@@ -1805,6 +1834,8 @@ struct TileContainerView: View {
             return "smartStack"
         case .spacer:
             return "spacer"
+        case .flexibleSpacer:
+            return "flexibleSpacer"
         case .divider:
             return "divider"
         case .launchpad:
@@ -1843,7 +1874,7 @@ struct TileContainerView: View {
                 guard folder.bundleIdentifiers.allSatisfy({ !selectedBundleIdentifierSet.contains($0) }) else {
                     continue
                 }
-            case .launchpad, .widget, .smartStack, .folder, .spacer, .divider, .trash:
+            case .launchpad, .widget, .smartStack, .folder, .spacer, .flexibleSpacer, .divider, .trash:
                 continue
             }
 
@@ -2057,6 +2088,12 @@ struct TileContainerView: View {
             )
         case .spacer:
             return Tile(id: "editor-preview:spacer", content: .spacer)
+        case .flexibleSpacer:
+            // Render the in-dock drop preview as a fixed-size spacer so the
+            // user has a tile-sized target to land on; the dropped tile is
+            // still persisted as `.flexibleSpacer` via the palette item
+            // factory and stretches once committed.
+            return Tile(id: "editor-preview:flexible-spacer", content: .spacer)
         case .divider:
             return Tile(id: "editor-preview:divider", content: .divider)
         case .widget(let ownerBundleIdentifier, let kind):

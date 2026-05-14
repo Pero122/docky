@@ -20,6 +20,7 @@ enum PinnedTileItemKind: String, Codable, Equatable {
     case widget
     case smartStack
     case spacer
+    case flexibleSpacer
     case divider
 }
 
@@ -29,6 +30,7 @@ enum TrailingTileItemKind: String, Codable, Equatable {
     case widget
     case smartStack
     case spacer
+    case flexibleSpacer
     case divider
 }
 
@@ -137,6 +139,22 @@ struct PinnedTileItem: Codable, Equatable, Identifiable {
         Self(
             id: "custom:\(UUID().uuidString)",
             kind: .spacer,
+            bundleIdentifier: nil,
+            folderDisplayName: nil,
+            folderBundleIdentifiers: [],
+            appFolderDisplayMode: nil,
+            folderContentViewMode: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func flexibleSpacer() -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .flexibleSpacer,
             bundleIdentifier: nil,
             folderDisplayName: nil,
             folderBundleIdentifiers: [],
@@ -320,6 +338,22 @@ struct TrailingTileItem: Codable, Equatable, Identifiable {
         Self(
             id: "custom:\(UUID().uuidString)",
             kind: .spacer,
+            sourceTileID: nil,
+            folderURL: nil,
+            folderDisplayName: nil,
+            folderDisplayMode: nil,
+            folderContentViewMode: nil,
+            widgetKind: nil,
+            widgetOwnerBundleIdentifier: nil,
+            widgetSpan: nil,
+            hiddenWidgetOwnerBundleIdentifiers: []
+        )
+    }
+
+    nonisolated static func flexibleSpacer() -> Self {
+        Self(
+            id: "custom:\(UUID().uuidString)",
+            kind: .flexibleSpacer,
             sourceTileID: nil,
             folderURL: nil,
             folderDisplayName: nil,
@@ -884,6 +918,12 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         Keys.tileActiveBackgroundImagePath,
         Keys.tileActiveBackgroundOpacity,
         Keys.tileActiveBackgroundCornerRadius,
+        Keys.widget1xContentPadding,
+        Keys.widget1xCornerRadius,
+        Keys.widget2xContentPadding,
+        Keys.widget2xCornerRadius,
+        Keys.widget3xContentPadding,
+        Keys.widget3xCornerRadius,
         Keys.windowCornerRadius,
         Keys.windowCornerRadiusTopLeading,
         Keys.windowCornerRadiusTopTrailing,
@@ -917,6 +957,7 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         Keys.iconShadowColor,
         Keys.iconShadowRadius,
         Keys.iconShadowOpacity,
+        Keys.showsActivePinnedSeparator,
     ]
 
     /// Whether the user has an explicit override for this preference
@@ -1129,6 +1170,145 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
             } else {
                 markAppearanceOverride(Keys.tileActiveBackgroundCornerRadius)
             }
+        }
+    }
+
+    /// Per-span widget chrome overrides. Each property is `nil` by
+    /// default; widgets at that span fall through to
+    /// `nonAppContentPadding` / `nonAppTileCornerRadius` (the tile
+    /// chrome inset + global clip-shape). Setting any of these
+    /// lets a theme (or the user) tune individual rendering sizes —
+    /// e.g. 3x widgets with zero padding and zero corner radius for
+    /// a Windows-style edge-to-edge look — without affecting 1x/2x.
+    var widget1xContentPadding: CGFloat? {
+        didSet {
+            guard widget1xContentPadding != oldValue else { return }
+            persistOptionalDouble(widget1xContentPadding, forKey: Keys.widget1xContentPadding)
+            if widget1xContentPadding == nil {
+                clearAppearanceOverride(Keys.widget1xContentPadding)
+            } else {
+                markAppearanceOverride(Keys.widget1xContentPadding)
+            }
+        }
+    }
+
+    var widget1xCornerRadius: CGFloat? {
+        didSet {
+            guard widget1xCornerRadius != oldValue else { return }
+            persistOptionalDouble(widget1xCornerRadius, forKey: Keys.widget1xCornerRadius)
+            if widget1xCornerRadius == nil {
+                clearAppearanceOverride(Keys.widget1xCornerRadius)
+            } else {
+                markAppearanceOverride(Keys.widget1xCornerRadius)
+            }
+        }
+    }
+
+    var widget2xContentPadding: CGFloat? {
+        didSet {
+            guard widget2xContentPadding != oldValue else { return }
+            persistOptionalDouble(widget2xContentPadding, forKey: Keys.widget2xContentPadding)
+            if widget2xContentPadding == nil {
+                clearAppearanceOverride(Keys.widget2xContentPadding)
+            } else {
+                markAppearanceOverride(Keys.widget2xContentPadding)
+            }
+        }
+    }
+
+    var widget2xCornerRadius: CGFloat? {
+        didSet {
+            guard widget2xCornerRadius != oldValue else { return }
+            persistOptionalDouble(widget2xCornerRadius, forKey: Keys.widget2xCornerRadius)
+            if widget2xCornerRadius == nil {
+                clearAppearanceOverride(Keys.widget2xCornerRadius)
+            } else {
+                markAppearanceOverride(Keys.widget2xCornerRadius)
+            }
+        }
+    }
+
+    var widget3xContentPadding: CGFloat? {
+        didSet {
+            guard widget3xContentPadding != oldValue else { return }
+            persistOptionalDouble(widget3xContentPadding, forKey: Keys.widget3xContentPadding)
+            if widget3xContentPadding == nil {
+                clearAppearanceOverride(Keys.widget3xContentPadding)
+            } else {
+                markAppearanceOverride(Keys.widget3xContentPadding)
+            }
+        }
+    }
+
+    var widget3xCornerRadius: CGFloat? {
+        didSet {
+            guard widget3xCornerRadius != oldValue else { return }
+            persistOptionalDouble(widget3xCornerRadius, forKey: Keys.widget3xCornerRadius)
+            if widget3xCornerRadius == nil {
+                clearAppearanceOverride(Keys.widget3xCornerRadius)
+            } else {
+                markAppearanceOverride(Keys.widget3xCornerRadius)
+            }
+        }
+    }
+
+    /// Resolves the effective content padding override for a widget
+    /// rendered at the given span. Returns `nil` if neither the user
+    /// nor the theme provided one — caller falls back to its own
+    /// default (typically `nonAppContentPadding`).
+    func effectiveWidgetContentPadding(for span: TileSpan) -> CGFloat? {
+        let (userKey, userValue) = widgetContentPaddingPair(for: span)
+        let themed = themedWidgetSpan(for: span)?.contentPadding
+        if isAppearanceOverridden(userKey), let userValue {
+            return max(0, userValue)
+        }
+        if let themed {
+            return max(0, themed)
+        }
+        return nil
+    }
+
+    func effectiveWidgetCornerRadius(for span: TileSpan) -> CGFloat? {
+        let (userKey, userValue) = widgetCornerRadiusPair(for: span)
+        let themed = themedWidgetSpan(for: span)?.cornerRadius
+        if isAppearanceOverridden(userKey), let userValue {
+            return max(0, userValue)
+        }
+        if let themed {
+            return max(0, themed)
+        }
+        return nil
+    }
+
+    private func widgetContentPaddingPair(for span: TileSpan) -> (String, CGFloat?) {
+        switch span {
+        case .one: (Keys.widget1xContentPadding, widget1xContentPadding)
+        case .two: (Keys.widget2xContentPadding, widget2xContentPadding)
+        case .three: (Keys.widget3xContentPadding, widget3xContentPadding)
+        }
+    }
+
+    private func widgetCornerRadiusPair(for span: TileSpan) -> (String, CGFloat?) {
+        switch span {
+        case .one: (Keys.widget1xCornerRadius, widget1xCornerRadius)
+        case .two: (Keys.widget2xCornerRadius, widget2xCornerRadius)
+        case .three: (Keys.widget3xCornerRadius, widget3xCornerRadius)
+        }
+    }
+
+    /// Theme-only flag (no user override surface). Returns `true` when
+    /// the active theme says this span's widgets should ignore the
+    /// theme-level tile icon padding.
+    func effectiveWidgetIgnoresAddedPaddings(for span: TileSpan) -> Bool {
+        themedWidgetSpan(for: span)?.ignoresAddedPaddings ?? false
+    }
+
+    private func themedWidgetSpan(for span: TileSpan) -> ThemeWidgetSpan? {
+        let widgets = ThemeManager.shared.activeManifest?.appearance.widgets
+        switch span {
+        case .one: return widgets?.oneX
+        case .two: return widgets?.twoX
+        case .three: return widgets?.threeX
         }
     }
 
@@ -1562,7 +1742,18 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         didSet {
             guard showsActivePinnedSeparator != oldValue else { return }
             defaults.set(showsActivePinnedSeparator, forKey: Keys.showsActivePinnedSeparator)
+            markAppearanceOverride(Keys.showsActivePinnedSeparator)
         }
+    }
+
+    /// Theme-aware accessor. Themes can suppress the pinned/active
+    /// divider for taskbar-style layouts; user overrides win when set.
+    var effectiveShowsActivePinnedSeparator: Bool {
+        appearanceOverride(
+            Keys.showsActivePinnedSeparator,
+            raw: showsActivePinnedSeparator,
+            themed: ThemeManager.shared.activeManifest?.behavior?.showsActivePinnedSeparator
+        )
     }
 
     /// Whether Docky surfaces unpinned running apps. Disable to use Docky as a static shelf alongside the system Dock.
@@ -1602,13 +1793,32 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// Shelve mode: hides Finder and Trash tiles so the dock reads as a
-    /// pure shelf of pinned apps + widgets. Independent of recent-app
-    /// suppression (`hidesRecentApps`).
+    /// Shelve mode: hides the Finder and/or Trash tiles so the dock
+    /// reads as a pure shelf of pinned apps + widgets. The granular
+    /// `shelveHidesFinder` / `shelveHidesTrash` prefs decide *which*
+    /// fixtures disappear when this is on; both default to `true` for
+    /// backward compatibility with the original boolean behavior.
     var enablesShelveMode: Bool {
         didSet {
             guard enablesShelveMode != oldValue else { return }
             defaults.set(enablesShelveMode, forKey: Keys.enablesShelveMode)
+        }
+    }
+
+    /// While shelve mode is on, whether the Finder tile is suppressed.
+    /// Has no effect when `enablesShelveMode` is `false`.
+    var shelveHidesFinder: Bool {
+        didSet {
+            guard shelveHidesFinder != oldValue else { return }
+            defaults.set(shelveHidesFinder, forKey: Keys.shelveHidesFinder)
+        }
+    }
+
+    /// While shelve mode is on, whether the Trash tile is suppressed.
+    var shelveHidesTrash: Bool {
+        didSet {
+            guard shelveHidesTrash != oldValue else { return }
+            defaults.set(shelveHidesTrash, forKey: Keys.shelveHidesTrash)
         }
     }
 
@@ -2882,6 +3092,12 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let tileActiveBackgroundImagePath = "docky.tileActiveBackgroundImagePath"
         static let tileActiveBackgroundOpacity = "docky.tileActiveBackgroundOpacity"
         static let tileActiveBackgroundCornerRadius = "docky.tileActiveBackgroundCornerRadius"
+        static let widget1xContentPadding = "docky.widget1xContentPadding"
+        static let widget1xCornerRadius = "docky.widget1xCornerRadius"
+        static let widget2xContentPadding = "docky.widget2xContentPadding"
+        static let widget2xCornerRadius = "docky.widget2xCornerRadius"
+        static let widget3xContentPadding = "docky.widget3xContentPadding"
+        static let widget3xCornerRadius = "docky.widget3xCornerRadius"
         static let windowCornerRadius = "docky.windowCornerRadius"
         static let windowCornerRadiusTopLeading = "docky.windowCornerRadiusTopLeading"
         static let windowCornerRadiusTopTrailing = "docky.windowCornerRadiusTopTrailing"
@@ -2918,6 +3134,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let showsMinimizedWindows = "docky.showsMinimizedWindows"
         static let hidesDuringFullscreen = "docky.hidesDuringFullscreen"
         static let enablesShelveMode = "docky.enablesShelveMode"
+        static let shelveHidesFinder = "docky.shelveHidesFinder"
+        static let shelveHidesTrash = "docky.shelveHidesTrash"
         static let hidesRecentApps = "docky.hidesRecentApps"
         static let appTileFrontmostClickBehavior = "docky.appTileFrontmostClickBehavior"
         static let activeIndicatorShape = "docky.activeIndicatorShape"
@@ -3005,6 +3223,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         static let showsMinimizedWindows = true
         static let hidesDuringFullscreen = true
         static let enablesShelveMode = false
+        static let shelveHidesFinder = true
+        static let shelveHidesTrash = true
         static let hidesRecentApps = false
         static let appTileFrontmostClickBehavior: AppTileFrontmostClickBehavior = .none
         static let activeIndicatorShape: DockTileIndicatorShape = .dot
@@ -3068,6 +3288,12 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         let storedTileActiveBackgroundImagePath = defaults.string(forKey: Keys.tileActiveBackgroundImagePath)
         let storedTileActiveBackgroundOpacity = defaults.object(forKey: Keys.tileActiveBackgroundOpacity) as? Double
         let storedTileActiveBackgroundCornerRadius = defaults.object(forKey: Keys.tileActiveBackgroundCornerRadius) as? Double
+        let storedWidget1xContentPadding = defaults.object(forKey: Keys.widget1xContentPadding) as? Double
+        let storedWidget1xCornerRadius = defaults.object(forKey: Keys.widget1xCornerRadius) as? Double
+        let storedWidget2xContentPadding = defaults.object(forKey: Keys.widget2xContentPadding) as? Double
+        let storedWidget2xCornerRadius = defaults.object(forKey: Keys.widget2xCornerRadius) as? Double
+        let storedWidget3xContentPadding = defaults.object(forKey: Keys.widget3xContentPadding) as? Double
+        let storedWidget3xCornerRadius = defaults.object(forKey: Keys.widget3xCornerRadius) as? Double
         let storedWindowCornerRadius = defaults.object(forKey: Keys.windowCornerRadius) as? Double
         let storedWindowCornerRadiusTopLeading = defaults.object(forKey: Keys.windowCornerRadiusTopLeading) as? Double
         let storedWindowCornerRadiusTopTrailing = defaults.object(forKey: Keys.windowCornerRadiusTopTrailing) as? Double
@@ -3103,6 +3329,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         let storedShowsRunningApps = defaults.object(forKey: Keys.showsRunningApps) as? Bool
         let storedShowsMinimizedWindows = defaults.object(forKey: Keys.showsMinimizedWindows) as? Bool
         let storedEnablesShelveMode = defaults.object(forKey: Keys.enablesShelveMode) as? Bool
+        let storedShelveHidesFinder = defaults.object(forKey: Keys.shelveHidesFinder) as? Bool
+        let storedShelveHidesTrash = defaults.object(forKey: Keys.shelveHidesTrash) as? Bool
         let storedHidesRecentApps = defaults.object(forKey: Keys.hidesRecentApps) as? Bool
         let storedAppTileFrontmostClickBehavior = defaults.string(forKey: Keys.appTileFrontmostClickBehavior)
         let storedActiveIndicatorShape = defaults.string(forKey: Keys.activeIndicatorShape)
@@ -3165,6 +3393,12 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.tileActiveBackgroundImagePath = storedTileActiveBackgroundImagePath
         self.tileActiveBackgroundOpacity = storedTileActiveBackgroundOpacity.map { CGFloat($0) }
         self.tileActiveBackgroundCornerRadius = storedTileActiveBackgroundCornerRadius.map { CGFloat($0) }
+        self.widget1xContentPadding = storedWidget1xContentPadding.map { CGFloat($0) }
+        self.widget1xCornerRadius = storedWidget1xCornerRadius.map { CGFloat($0) }
+        self.widget2xContentPadding = storedWidget2xContentPadding.map { CGFloat($0) }
+        self.widget2xCornerRadius = storedWidget2xCornerRadius.map { CGFloat($0) }
+        self.widget3xContentPadding = storedWidget3xContentPadding.map { CGFloat($0) }
+        self.widget3xCornerRadius = storedWidget3xCornerRadius.map { CGFloat($0) }
         self.windowCornerRadius = storedWindowCornerRadius.map { CGFloat($0) } ?? DefaultValues.windowCornerRadius
         self.windowCornerRadiusTopLeading = storedWindowCornerRadiusTopLeading.map { CGFloat($0) }
         self.windowCornerRadiusTopTrailing = storedWindowCornerRadiusTopTrailing.map { CGFloat($0) }
@@ -3203,6 +3437,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         self.showsMinimizedWindows = storedShowsMinimizedWindows ?? DefaultValues.showsMinimizedWindows
         self.hidesDuringFullscreen = (defaults.object(forKey: Keys.hidesDuringFullscreen) as? Bool) ?? DefaultValues.hidesDuringFullscreen
         self.enablesShelveMode = storedEnablesShelveMode ?? DefaultValues.enablesShelveMode
+        self.shelveHidesFinder = storedShelveHidesFinder ?? DefaultValues.shelveHidesFinder
+        self.shelveHidesTrash = storedShelveHidesTrash ?? DefaultValues.shelveHidesTrash
         self.hidesRecentApps = storedHidesRecentApps ?? DefaultValues.hidesRecentApps
         self.appTileFrontmostClickBehavior = storedAppTileFrontmostClickBehavior
             .flatMap(AppTileFrontmostClickBehavior.init(rawValue:))
@@ -3354,6 +3590,14 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         tileActiveBackgroundOpacity = nil
         tileActiveBackgroundCornerRadius = nil
 
+        // Per-span widget chrome overrides
+        widget1xContentPadding = nil
+        widget1xCornerRadius = nil
+        widget2xContentPadding = nil
+        widget2xCornerRadius = nil
+        widget3xContentPadding = nil
+        widget3xCornerRadius = nil
+
         // Icon Shadow (lives next to Tile Layout in the UI)
         iconShadowColor = DefaultValues.iconShadowColor
         iconShadowRadius = DefaultValues.iconShadowRadius
@@ -3409,6 +3653,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         hidesDuringFullscreen = DefaultValues.hidesDuringFullscreen
         fullscreenRevealDelay = DefaultValues.fullscreenRevealDelay
         enablesShelveMode = DefaultValues.enablesShelveMode
+        shelveHidesFinder = DefaultValues.shelveHidesFinder
+        shelveHidesTrash = DefaultValues.shelveHidesTrash
         hidesRecentApps = DefaultValues.hidesRecentApps
         showsRunningApps = DefaultValues.showsRunningApps
         showsMinimizedWindows = DefaultValues.showsMinimizedWindows
@@ -3475,6 +3721,8 @@ enum WindowSwitcherLayout: String, CaseIterable, Codable, Identifiable {
         showsMinimizedWindows = DefaultValues.showsMinimizedWindows
         hidesDuringFullscreen = DefaultValues.hidesDuringFullscreen
         enablesShelveMode = DefaultValues.enablesShelveMode
+        shelveHidesFinder = DefaultValues.shelveHidesFinder
+        shelveHidesTrash = DefaultValues.shelveHidesTrash
         hidesRecentApps = DefaultValues.hidesRecentApps
         appTileFrontmostClickBehavior = DefaultValues.appTileFrontmostClickBehavior
         activeIndicatorShape = DefaultValues.activeIndicatorShape

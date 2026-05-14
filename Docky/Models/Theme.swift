@@ -54,6 +54,41 @@ struct ThemeManifest: Codable, Equatable {
     /// through to the user's preference, and any user-overridden key
     /// stays on the user's value even while the theme is active.
     var behavior: ThemeBehavior?
+
+    /// Layout-level injections — extra structural tiles a theme drops
+    /// into the assembled dock. Lets a theme add a flexible spacer
+    /// after the trailing divider so pinned apps pin-left while the
+    /// trailing section flushes right (Windows feel), without the
+    /// user having to wire it up manually.
+    var layout: ThemeLayout?
+}
+
+struct ThemeLayout: Codable, Equatable {
+    var insertions: [ThemeLayoutInsertion]?
+}
+
+struct ThemeLayoutInsertion: Codable, Equatable {
+    /// Tile content to inject. Structural primitives: `"spacer"`,
+    /// `"flexibleSpacer"`, `"divider"`. Widget kinds also accepted —
+    /// any raw value of `WidgetKind` (e.g. `"search"`, `"calendar"`,
+    /// `"weather"`). Unknown values are silently skipped.
+    var kind: String
+
+    /// Place the new tile immediately after the tile whose id matches.
+    /// `anchor` resolves first by exact tile id (e.g.
+    /// `"divider:trailing"`, `"divider:running"`,
+    /// `"pinned:com.apple.finder"`) and then by app bundle identifier
+    /// (e.g. `"com.apple.Safari"`). At most one of `after` / `before`
+    /// may be set; if both are set, `after` wins.
+    var after: String?
+
+    /// Place the new tile immediately before the matching tile.
+    var before: String?
+
+    /// Span for widget insertions. `1`, `2`, or `3`. Ignored for
+    /// structural insertions (spacer / flexibleSpacer / divider).
+    /// When unset, the widget's `WidgetCatalog` defaultSpan is used.
+    var span: Int?
 }
 
 struct ThemeBehavior: Codable, Equatable {
@@ -65,6 +100,10 @@ struct ThemeBehavior: Codable, Equatable {
     var largeSize: CGFloat?
     /// Whether magnification is on by default for this theme.
     var magnification: Bool?
+    /// Whether to render the vertical divider that separates pinned
+    /// apps from the running/recent zone. Themes that want a flat
+    /// continuous taskbar (Windows look) set this to `false`.
+    var showsActivePinnedSeparator: Bool?
 }
 
 struct ThemeAppearance: Codable, Equatable {
@@ -76,6 +115,32 @@ struct ThemeAppearance: Codable, Equatable {
     /// (apps, app folders, trash, launchpad, etc.). When `color` is
     /// nil no shadow renders regardless of the other fields.
     var iconShadow: ThemeShadow?
+    /// Per-span widget-tile chrome overrides: each rendering size
+    /// (1x / 2x / 3x) can opt into its own content padding and
+    /// corner radius, or inherit the existing
+    /// `tileChromeInset`/`tileClipShape` defaults when unset.
+    var widgets: ThemeWidgets?
+}
+
+struct ThemeWidgets: Codable, Equatable {
+    var oneX: ThemeWidgetSpan?
+    var twoX: ThemeWidgetSpan?
+    var threeX: ThemeWidgetSpan?
+}
+
+struct ThemeWidgetSpan: Codable, Equatable {
+    /// Inner padding between the tile bounds and the widget content.
+    /// `0` makes the widget bleed all the way to the tile edge.
+    var contentPadding: CGFloat?
+    /// Override for the widget tile's corner radius. `0` produces a
+    /// sharp-cornered chrome that fills the tile box completely.
+    var cornerRadius: CGFloat?
+    /// Theme-only escape hatch (no Settings UI): when `true`, this
+    /// span's widget tiles ignore the theme's tile-level
+    /// `iconPadding` so the widget can truly fill its tile box.
+    /// Useful when a theme adds icon padding for chunky app tiles
+    /// but wants 2x/3x widgets edge-to-edge.
+    var ignoresAddedPaddings: Bool?
 }
 
 struct ThemeTile: Codable, Equatable {

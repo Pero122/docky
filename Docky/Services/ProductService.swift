@@ -152,7 +152,7 @@ extension DockEditPaletteItem {
             kind.productFeature
         case .smartStack:
             .smartStack
-        case .spacer, .divider:
+        case .spacer, .flexibleSpacer, .divider:
             nil
         }
     }

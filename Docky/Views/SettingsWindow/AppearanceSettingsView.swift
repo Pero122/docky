@@ -14,6 +14,7 @@ struct AppearanceSettingsView: View {
         case tileLayout
         case windowShape
         case windowBackground
+        case widgets
     }
 
     let subsection: Subsection
@@ -35,6 +36,8 @@ struct AppearanceSettingsView: View {
                 windowShapeSection
             case .windowBackground:
                 windowBackgroundSection
+            case .widgets:
+                widgetsSection
             }
         }
         .formStyle(.grouped)
@@ -762,6 +765,107 @@ struct AppearanceSettingsView: View {
     }
 
     @ViewBuilder
+    private var widgetsSection: some View {
+        Section {
+            widgetSpanBlock(
+                title: "1x Widgets",
+                paddingBinding: $preferences.widget1xContentPadding,
+                radiusBinding: $preferences.widget1xCornerRadius,
+                effectivePadding: preferences.effectiveWidgetContentPadding(for: .one),
+                effectiveRadius: preferences.effectiveWidgetCornerRadius(for: .one)
+            )
+            widgetSpanBlock(
+                title: "2x Widgets",
+                paddingBinding: $preferences.widget2xContentPadding,
+                radiusBinding: $preferences.widget2xCornerRadius,
+                effectivePadding: preferences.effectiveWidgetContentPadding(for: .two),
+                effectiveRadius: preferences.effectiveWidgetCornerRadius(for: .two)
+            )
+            widgetSpanBlock(
+                title: "3x Widgets",
+                paddingBinding: $preferences.widget3xContentPadding,
+                radiusBinding: $preferences.widget3xCornerRadius,
+                effectivePadding: preferences.effectiveWidgetContentPadding(for: .three),
+                effectiveRadius: preferences.effectiveWidgetCornerRadius(for: .three)
+            )
+
+            Text("Each rendering size can opt into its own content padding and corner radius. Unset values inherit the tile-chrome defaults — useful for letting wide widgets bleed edge-to-edge while keeping the 1x form rounded.")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func widgetSpanBlock(
+        title: String,
+        paddingBinding: Binding<CGFloat?>,
+        radiusBinding: Binding<CGFloat?>,
+        effectivePadding: CGFloat?,
+        effectiveRadius: CGFloat?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+
+            widgetOverrideRow(
+                label: "Content Padding",
+                binding: paddingBinding,
+                effective: effectivePadding,
+                range: 0...32
+            )
+            widgetOverrideRow(
+                label: "Corner Radius",
+                binding: radiusBinding,
+                effective: effectiveRadius,
+                range: 0...32
+            )
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func widgetOverrideRow(
+        label: String,
+        binding: Binding<CGFloat?>,
+        effective: CGFloat?,
+        range: ClosedRange<Double>
+    ) -> some View {
+        // Three-state row: the toggle is the user's intent (override
+        // this span's value or inherit). The slider becomes editable
+        // only when the override is on. Unset state shows "inherited"
+        // rather than a meaningless number.
+        let isOverriding = Binding<Bool>(
+            get: { binding.wrappedValue != nil },
+            set: { uses in
+                if uses {
+                    binding.wrappedValue = effective ?? 0
+                } else {
+                    binding.wrappedValue = nil
+                }
+            }
+        )
+        let sliderValue = Binding<Double>(
+            get: { Double(binding.wrappedValue ?? effective ?? 0) },
+            set: { binding.wrappedValue = CGFloat($0) }
+        )
+        HStack {
+            Toggle(isOn: isOverriding) {
+                Text(label).frame(width: 140, alignment: .leading)
+            }
+            .toggleStyle(.checkbox)
+            Slider(value: sliderValue, in: range, step: 1) {
+                Text(label)
+            }
+            .labelsHidden()
+            .disabled(!isOverriding.wrappedValue)
+            Text(isOverriding.wrappedValue
+                 ? "\(Int(sliderValue.wrappedValue)) pt"
+                 : (effective.map { "\(Int($0)) pt" } ?? "inherited"))
+                .foregroundStyle(.secondary)
+                .frame(width: 80, alignment: .trailing)
+        }
+    }
+
     private var windowBackgroundSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
