@@ -766,6 +766,7 @@ enum FolderTileContentViewMode: String, CaseIterable, Codable, Identifiable {
     case grid
     case list
     case inline
+    case fan
 
     var id: String { rawValue }
 
@@ -774,6 +775,7 @@ enum FolderTileContentViewMode: String, CaseIterable, Codable, Identifiable {
         case .grid: String(localized: "Grid")
         case .list: String(localized: "List")
         case .inline: String(localized: "Inline")
+        case .fan: String(localized: "Fan")
         }
     }
 
@@ -786,7 +788,9 @@ enum FolderTileContentViewMode: String, CaseIterable, Codable, Identifiable {
             self = .list
         case Self.inline.rawValue:
             self = .inline
-        case Self.grid.rawValue, "fan":
+        case Self.fan.rawValue:
+            self = .fan
+        case Self.grid.rawValue:
             self = .grid
         default:
             self = .grid

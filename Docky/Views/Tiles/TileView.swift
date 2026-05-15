@@ -8,10 +8,13 @@
 
 import AppKit
 import Combine
+import OSLog
 import QuickLookThumbnailing
 import SwiftUI
 
 struct TileView: View {
+    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileTap")
+
     let tile: Tile
     let isDragging: Bool
     let isDocumentDropTarget: Bool
@@ -193,6 +196,14 @@ struct TileView: View {
                 },
                 .action(String(localized: "List"), isOn: folderContentViewMode == .list) {
                     TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .list)
+                },
+                // Fan only renders when the dock sits at the bottom
+                // edge and the folder has ≤ FolderFanView.maximumItemCount
+                // items. Outside those conditions the dispatch falls
+                // back to grid, but we still expose the option so the
+                // user's choice is preserved across dock moves.
+                .action(String(localized: "Fan"), isOn: folderContentViewMode == .fan) {
+                    TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .fan)
                 }
             ]),
             .submenu(String(localized: "Sort By"), children: FolderTileSortMode.allCases.map { mode in
@@ -586,9 +597,9 @@ struct TileView: View {
                 proxy.frame(in: .global)
             } action: { newFrame in
                 globalTileFrame = newFrame
-                TilePressService.shared.registerFrame(tileID: tile.id, globalFrame: newFrame)
             }
             .onChange(of: isHovering) { isHovering in
+                TilePressService.shared.registerHover(tileID: tile.id, isHovering: isHovering)
                 updateWidgetExpansionPresentation(isHovering: isHovering, sourceFrame: globalTileFrame)
             }
             .onDisappear {
@@ -605,7 +616,7 @@ struct TileView: View {
                 isAppFolderListMenuPresented = false
                 isContextMenuPresented = false
                 WindowPreviewWindowController.shared.dismiss(sourceTileID: tile.id)
-                TilePressService.shared.unregisterFrame(tileID: tile.id)
+                TilePressService.shared.clearHover(tileID: tile.id)
             }
             .onChange(of: isFolderPopoverPresented) { isPresented in
                 updateTooltipPresentation()
@@ -671,6 +682,24 @@ struct TileView: View {
                             ),
                             isPresented: $isFolderListMenuPresented,
                             preferredEdge: inwardPopoverEdge
+                        )
+                    } else if folderContentViewMode == .fan,
+                              position == .bottom,
+                              case .loaded(let snapshotItems) = folderSnapshot,
+                              snapshotItems.count <= FolderFanView.maximumItemCount {
+                        // Fan mode: bottom-anchored parabolic overlay,
+                        // only when the folder fits in a single bow.
+                        // Larger folders silently fall through to the
+                        // grid popover below — `>10 items → grid` is
+                        // intentional per spec.
+                        let fanItems = FolderAccessService.shared.sortedItems(
+                            in: snapshotItems,
+                            sortMode: folderSortMode
+                        )
+                        FolderFanPresenter(
+                            folderURL: folder.url,
+                            items: fanItems,
+                            isPresented: $isFolderPopoverPresented
                         )
                     } else {
                         FolderPopoverPresenter(
@@ -1361,7 +1390,24 @@ struct TileView: View {
         isTooltipPresented = true
     }
 
+    private var tileContentKindDescription: String {
+        switch tile.content {
+        case .app: return "app"
+        case .minimizedWindow: return "minimizedWindow"
+        case .appFolder: return "appFolder"
+        case .folder: return "folder"
+        case .launchpad: return "launchpad"
+        case .widget: return "widget"
+        case .smartStack: return "smartStack"
+        case .trash: return "trash"
+        case .spacer: return "spacer"
+        case .flexibleSpacer: return "flexibleSpacer"
+        case .divider: return "divider"
+        }
+    }
+
     private func handleTap() {
+        Self.logger.info("handleTap tileID=\(tile.id, privacy: .public) contentKind=\(tileContentKindDescription, privacy: .public) locked=\(isLockedProductPlacement, privacy: .public)")
         if isLockedProductPlacement {
             isTooltipPresented = false
             openProductSettings()
