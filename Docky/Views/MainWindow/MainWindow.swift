@@ -620,8 +620,18 @@ final class MainWindow: NSPanel {
     }
 
     private func applyCurrentFrame(animated: Bool, duration: TimeInterval?) {
-        let screenBounds = targetScreen()?.frame ?? screen?.frame ?? NSScreen.main?.frame ?? .zero
+        let resolvedScreen = targetScreen() ?? screen ?? NSScreen.main
+        let screenBounds = resolvedScreen?.frame ?? .zero
         lastPointerScreenFrame = screenBounds
+        // Vertical full-axis used to span `screen.frame` and slipped
+        // behind the menu bar (and the system Dock, when shown). Use
+        // `visibleFrame` for vertical positions so axis length and
+        // origin centering are computed against the same clamped
+        // rect — the dock then sits exactly between the menu bar
+        // and the system Dock without any per-edge offset math.
+        // Horizontal positions stay anchored to `screen.frame` so a
+        // top dock keeps anchoring to the top edge, etc.
+        let visibleBounds = resolvedScreen?.visibleFrame ?? screenBounds
         // Window-frame math needs the *total* horizontal and vertical
         // padding the chrome view leaves around itself inside the panel.
         // Per-edge insets live in `DockyPreferences`; full-axis mode
@@ -666,9 +676,10 @@ final class MainWindow: NSPanel {
             position: position
         )
         let alongAxisContentPadding = position.isVertical ? verticalContentPadding : horizontalContentPadding
+        let layoutBounds = position.isVertical ? visibleBounds : screenBounds
         let unreservedAvailableAxisLength = max(
             0,
-            axisLength(of: screenBounds.size, position: position) - alongAxisContentPadding
+            axisLength(of: layoutBounds.size, position: position) - alongAxisContentPadding
         )
         let contentAvailableAxisLength = max(
             0,
@@ -760,7 +771,7 @@ final class MainWindow: NSPanel {
         )
         let size = CGSize(width: width, height: height)
         let origin = frameOrigin(
-            in: screenBounds,
+            in: layoutBounds,
             size: size,
             position: position,
             visibilityState: visibilityState
