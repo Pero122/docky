@@ -2847,6 +2847,9 @@ func fileContextActions(for url: URL) -> [ContextAction] {
         .lazySubmenu(String(localized: "Open With"), image: contextMenuSymbol("app.badge")) {
             openWithApplicationActions(for: url)
         },
+        .action(String(localized: "Reveal in Finder"), image: contextMenuSymbol("folder")) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        },
         .divider,
         .action(String(localized: "Copy"), image: contextMenuSymbol("doc.on.doc")) {
             let pasteboard = NSPasteboard.general
@@ -2894,8 +2897,8 @@ private func recentFileContextAction(for url: URL) -> ContextAction {
     let displayName = (try? url.resourceValues(forKeys: [.localizedNameKey]).localizedName)
         ?? url.lastPathComponent
     let icon = IconCacheService.shared.icon(forFileURL: url)
-    return .action(displayName, image: icon) {
-        NSWorkspace.shared.open(url)
+    return .lazySubmenu(displayName, image: icon) {
+        fileContextActions(for: url)
     }
 }
 
