@@ -76,13 +76,22 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
             height: size.height + Self.contentPadding * 2
         )
 
+        // Widget views pick their layout variant (1-up / 2-up / 3-up)
+        // off `renderedSpan`, so a 1x1 tile's expanded preview was
+        // drawing 1-up content inside a 3x3 window. Map the expansion
+        // extent's tile width to the equivalent TileSpan instead, clamped
+        // to `.four` (the highest case) for the 5-wide nowPlaying preview.
+        let expandedRenderedSpan = TileSpan(
+            rawValue: min(max(extent.widthTiles, 1), TileSpan.four.rawValue)
+        ) ?? .four
+
         let rootView = ZStack {
             Color.clear
 
             WidgetTileView(
                 tile: widget,
                 cornerRadius: cornerRadius,
-                renderedSpan: renderedSpan,
+                renderedSpan: expandedRenderedSpan,
                 isWithinStack: false,
                 isExpanded: true,
                 isExpandedPreviewOpen: true

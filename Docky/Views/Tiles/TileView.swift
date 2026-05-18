@@ -2070,7 +2070,7 @@ struct TileView: View {
             return [.one]
         }
 
-        return widget.kind.supportedSpans
+        return widget.kind.supportedSpans.filter { $0 != .four }
     }
 
     private func availableAppWidgetSpans(for kind: WidgetKind) -> [TileSpan] {
@@ -2078,7 +2078,7 @@ struct TileView: View {
             return [.one]
         }
 
-        return kind.supportedSpans
+        return kind.supportedSpans.filter { $0 != .four }
     }
 
     private func applyWidgetSpan(_ span: TileSpan) {

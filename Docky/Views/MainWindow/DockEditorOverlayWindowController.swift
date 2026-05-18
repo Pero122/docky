@@ -160,7 +160,10 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             subtitle: subtitle(for: registration.kind),
             iconName: iconName(for: paletteItem),
             category: .widgets,
-            supportedSpans: registration.kind.supportedSpans,
+            // `.four` is theme-only — filtered here so the user-facing
+            // palette never offers it as a span choice. Themes that need
+            // a 4-wide affordance inject it via `layout.insertions`.
+            supportedSpans: registration.kind.supportedSpans.filter { $0 != .four },
             defaultSpan: registration.defaultSpan,
             searchIndex: makeSearchIndex(
                 title: registration.kind.title,
