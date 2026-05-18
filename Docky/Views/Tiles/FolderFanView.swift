@@ -18,117 +18,240 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// Externally-controlled expand state for the fan. Living in an
+/// ObservableObject (instead of `@State` on `FolderFanView`) lets
+/// the presenter's coordinator flip it back to `false` on dismiss
+/// so the reverse animation plays before the window orders out.
+final class FanAnimationModel: ObservableObject {
+    @Published var isExpanded: Bool = false
+}
+
 struct FolderFanView: View {
     static let maximumItemCount = 10
-    /// Width of one item's bounding box. Exposed so the presenter
-    /// can position the window so item 0 (the anchor at the bottom
-    /// of the ellipse) lands centered above the tile.
-    static let itemBoxWidth: CGFloat = 100
+
+    // MARK: Layout constants (exposed for the presenter)
+
+    static let labelMaxWidth: CGFloat = 140
+    static let labelIconGap: CGFloat = 8
+    static let bottomPadding: CGFloat = 4
+
+    /// Horizontal distance from the view's leading edge to item 0's
+    /// icon *center*. The presenter passes the tile-derived icon
+    /// size in so window placement matches the view's layout.
+    static func anchorIconOffsetX(iconSize: CGFloat) -> CGFloat {
+        labelMaxWidth + labelIconGap + iconSize / 2
+    }
 
     let folderURL: URL
     let items: [URL]
+    /// Side length of each preview icon. The presenter sets this to
+    /// the same 0.82× tile multiplier `FolderTileView.stack(in:)`
+    /// uses for the tile's fanned preview, so the fan icons match
+    /// the size of the icons the user just clicked on.
+    let iconSize: CGFloat
+    /// Longest side of the screen the fan is opening on, in points.
+    /// Used as the circle's radius (diameter = 2× this), so items
+    /// traverse a tiny arc of a very large circle — the gentle
+    /// outward drift characteristic of the macOS Dock fan.
+    let screenLongestDimension: CGFloat
+    /// How far below the icon-resting baseline the fan view extends
+    /// so it overlaps the dock chrome and the tile itself. Items
+    /// animate *from* the bottom of this extended area (over the
+    /// tile center) up onto the curve, instead of starting from
+    /// their final position above the chrome.
+    let chromeReach: CGFloat
+    /// Drives the open/close animation. The presenter sets
+    /// `isExpanded = true` once the window is on screen and
+    /// `isExpanded = false` when dismissing — the reverse animation
+    /// plays out before the window is finally ordered out.
+    @ObservedObject var model: FanAnimationModel
     let onSelect: (URL) -> Void
 
-    @State private var hasAppeared = false
-
-    // Geometry: a quarter ellipse sweeps from item 0 at the bottom-left
-    // (anchored above the tile) up and to the right to the last item
-    // at the top-right of the view. `ellipseA` controls how far right
-    // the fan reaches; `ellipseB` scales with item count so taller
-    // fans get more vertical headroom without stretching the bow.
-    private let iconSize: CGFloat = 48
-    private let labelMaxWidth: CGFloat = FolderFanView.itemBoxWidth
-    private let labelHeight: CGFloat = 18
-    private let perItemVertical: CGFloat = 56
-    private let ellipseA: CGFloat = 130
+    // Along-arc spacing per item. Bumped 25% over the original 12 pt
+    // for a touch more breathing room. The clamp bounds in
+    // `deltaTheta` are bumped in lockstep so the per-item visual
+    // spacing actually reflects the increase instead of being held
+    // back by the floor.
+    private let perItemArcLength: CGFloat = 15
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .topLeading) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, url in
                 fanItem(url: url, index: index, total: items.count)
             }
         }
-        .frame(width: viewWidth, height: viewHeight, alignment: .bottomLeading)
-        .onAppear { hasAppeared = true }
+        .frame(width: viewWidth, height: viewHeight, alignment: .topLeading)
     }
 
     @ViewBuilder
     private func fanItem(url: URL, index: Int, total: Int) -> some View {
         let t = total <= 1 ? 0 : CGFloat(index) / CGFloat(total - 1)
-        // θ runs from π (item 0 at the bottom-left corner of the
-        // bounding box, x=0, y=0) to π/2 (last item at the top-right,
-        // x=ellipseA, y=ellipseB). cos(π)=-1 so the +1 offset places
-        // item 0 exactly at the origin.
-        let theta = .pi - (.pi / 2) * t
-        let curveX = ellipseA * (1 + cos(theta))
-        let curveY = ellipseB * sin(theta)
+        // θ runs from π (item 0 at x=0, y=0) backward by `deltaTheta`
+        // radians (the angular span needed to cover the total arc
+        // length at our radius). Circle center is at (radius, 0) so
+        // cos(π) = -1 yields x=0 for item 0; subsequent items move
+        // right and up as θ decreases.
+        let theta = .pi - deltaTheta * t
+        let curveX = radius * (1 + cos(theta))
+        let curveY = radius * sin(theta)
+        // Pre-compute the heavy sums so the SwiftUI builder doesn't
+        // blow up the type-checker on the modifiers below.
+        let hstackWidth = Self.labelMaxWidth + Self.labelIconGap + iconSize
+        let positionX = Self.anchorIconOffsetX(iconSize: iconSize)
+            + curveX
+            - (Self.labelMaxWidth + Self.labelIconGap) / 2
+        let positionY = anchorIconCenterY - curveY
+        let initialOffsetY = curveY
+            + Self.bottomPadding
+            + chromeReach
+            + stackPreviewOffsetY(for: index, total: total)
 
         Button(action: { onSelect(url) }) {
-            VStack(spacing: 4) {
-                Image(nsImage: IconCacheService.shared.icon(forFileURL: url))
+            HStack(alignment: .center, spacing: Self.labelIconGap) {
+                Text(displayName(for: url))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    // Use the same Liquid-Glass / SkyLight-fallback
+                    // chrome the rest of Docky uses for tile glass
+                    // surfaces. Falls back automatically when glass
+                    // is unavailable so the chip stays readable.
+                    .dockyGlass(in: Capsule())
+                    .dockyGlassBorder(in: Capsule())
+                    .frame(maxWidth: Self.labelMaxWidth, alignment: .trailing)
+                    // Chip fades in alongside the position slide and
+                    // reaches full opacity exactly when the icon
+                    // arrives on the curve — sharing the same
+                    // animation modifier below.
+                    .opacity(model.isExpanded ? 1 : 0)
+
+                // Use the same `previewIcon` path the grid popover
+                // and folder stack thumbnails go through — that's
+                // the one that returns a QuickLook content preview
+                // for documents/images and falls back to the system
+                // icon for everything else.
+                Image(nsImage: IconCacheService.shared.previewIcon(forFileURL: url))
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
                     .frame(width: iconSize, height: iconSize)
                     .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 2)
-
-                Text(displayName(for: url))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(.black.opacity(0.55))
-                    )
-                    .frame(maxWidth: labelMaxWidth)
             }
-            .frame(width: Self.itemBoxWidth, alignment: .center)
+            .frame(width: hstackWidth, alignment: .trailing)
         }
         .buttonStyle(.plain)
-        // `.position(x:y:)` is the *final* spot for this item along
-        // the ellipse. `.offset(...)` is what we animate: until the
-        // view appears, every item is offset back toward item 0's
-        // position (the anchor at the bottom-left, right above the
-        // tile), so the fan visually "shoots" each thumbnail from
-        // the tile to its destination along the curve. No opacity or
-        // scale — pure position animation, with a per-item stagger
-        // so items leave the tile one after another.
-        .position(
-            x: Self.itemBoxWidth / 2 + curveX,
-            y: viewHeight - (iconSize / 2 + labelHeight) - curveY
-        )
+        // `.position(x:y:)` places the HStack *center* at the given
+        // point. We want the *icon* center (right end of the HStack)
+        // on the curve, so `positionX` is shifted left by half the
+        // (label + gap) span to compensate.
+        .position(x: positionX, y: positionY)
+        // Until the view appears, every item is offset to the same
+        // spot — icon bottom flush with the view's bottom edge,
+        // which sits over the tile (inside the chrome). The Y term
+        // is `curveY + bottomPadding + chromeReach` so each item's
+        // resting position (offset 0) and starting position differ
+        // by exactly the curve travel + the chrome overlap. Adding
+        // an extra `iconSize/2` here would push the icon below the
+        // view's frame and the hosting view would clip the bottom
+        // half during the first frame of animation.
+        // Tangent-matched clockwise rotation: each item leans into
+        // the curve by the angular distance it has travelled from
+        // item 0 along the ellipse. At rest on the tile (collapsed)
+        // everything is upright; as items slide out to their final
+        // spot, they rotate to match the curve's local tangent.
+        .rotationEffect(.radians(model.isExpanded ? deltaTheta * t : 0))
+        // `initialOffsetY` collapses each item back onto the tile,
+        // with the 3-item stack offset matching `FolderTileView`'s
+        // preview so there's no jump at the start or end of the
+        // animation.
         .offset(
-            x: hasAppeared ? 0 : -curveX,
-            y: hasAppeared ? 0 : curveY
+            x: model.isExpanded ? 0 : -curveX,
+            y: model.isExpanded ? 0 : initialOffsetY
         )
+        // Snappy: 0.25s spring, 20 ms stagger. Last of 10 items
+        // finishes at 0.02*9 + 0.25 ≈ 0.43s. Same modifier drives
+        // both the position slide and the chip's opacity, so the
+        // label reaches full opacity exactly when the icon arrives
+        // on the curve.
         .animation(
-            .spring(response: 0.45, dampingFraction: 0.78).delay(Double(index) * 0.04),
-            value: hasAppeared
+            .spring(response: 0.25, dampingFraction: 0.82)
+                .delay(Double(index) * 0.02),
+            value: model.isExpanded
         )
+        // Bottom-landing items (low `index`) paint *on top* of the
+        // initial collapsed pile, top-landing items (high `index`)
+        // sit at the back. In the expanded state the cells are at
+        // distinct curve points so they don't overlap and zIndex is
+        // visually inert.
+        .zIndex(-Double(index))
     }
 
-    private var ellipseB: CGFloat {
-        // The vertical span of the ellipse grows with item count so
-        // each item gets roughly `perItemVertical` of clearance along
-        // the arc. Floor at 0 for the single-item edge case.
-        max(0, CGFloat(items.count - 1) * perItemVertical)
+    // MARK: Curve
+
+    private var radius: CGFloat { screenLongestDimension }
+
+    private var deltaTheta: CGFloat {
+        // Clamp the angular span to [scaledMin, 20°]. The upper
+        // bound keeps the fan from opening into a wide wedge (macOS
+        // Dock fan is a near-vertical column with gentle outward
+        // drift, not a sector). The lower bound scales linearly
+        // with item count so 10 items hit a 10° floor while a
+        // 2-item fan only needs ~1° of curve — preventing the min
+        // clamp from spreading sparse fans halfway across the
+        // screen.
+        guard items.count > 1, radius > 0 else { return 0 }
+        let absoluteMaxSpan = CGFloat.pi * 25 / 180
+        let maxScaledMinSpan = CGFloat.pi * 12.5 / 180
+        let progress = CGFloat(items.count - 1) / CGFloat(Self.maximumItemCount - 1)
+        let scaledMinSpan = maxScaledMinSpan * progress
+        let natural = CGFloat(items.count - 1) * perItemArcLength / radius
+        return min(absoluteMaxSpan, max(scaledMinSpan, natural))
     }
+
+    private var maxCurveX: CGFloat { radius * (1 - cos(deltaTheta)) }
+    private var maxCurveY: CGFloat { radius * sin(deltaTheta) }
+
+    // MARK: Frame
 
     private var viewWidth: CGFloat {
-        // ellipseA is the horizontal reach from item 0; add half an
-        // item box on each side so the icons + labels don't clip.
-        ellipseA + Self.itemBoxWidth
+        Self.labelMaxWidth + Self.labelIconGap + iconSize + maxCurveX
     }
 
     private var viewHeight: CGFloat {
-        ellipseB + iconSize + labelHeight + 8
+        // `chromeReach` is the extra height below item 0's icon
+        // that the view occupies so animations can start over the
+        // tile. The icon baseline stays at the same screen position
+        // because the presenter shifts the window down by exactly
+        // `chromeReach`.
+        iconSize + maxCurveY + Self.bottomPadding + chromeReach
+    }
+
+    private var anchorIconCenterY: CGFloat {
+        viewHeight - Self.bottomPadding - chromeReach - iconSize / 2
     }
 
     private func displayName(for url: URL) -> String {
         (try? url.resourceValues(forKeys: [.localizedNameKey]).localizedName) ?? url.lastPathComponent
+    }
+
+    /// Y offset for the fan's collapsed-onto-tile state. The
+    /// top-landing item (the back of the items list, which flies
+    /// furthest to the top of the arc) sits at the *bottom* of the
+    /// initial stack; the bottom-landing item (newest, closest to
+    /// the tile) sits at the *top* of the initial stack — the
+    /// inverse of `FolderTileView.stack(in:)`'s pile.
+    ///
+    /// Mapping by index from the front of the list: index 0 → −4,
+    /// index 1 → 0, index 2+ → +4 (clamped, since the tile preview
+    /// only spans 3 slots anyway).
+    private func stackPreviewOffsetY(for index: Int, total: Int) -> CGFloat {
+        let tileStackVerticalStep: CGFloat = 4
+        let cappedIndex = min(index, 2)
+        let centeredBaseOffset: CGFloat = 1 // (3 - 1) / 2
+        return (CGFloat(cappedIndex) - centeredBaseOffset) * tileStackVerticalStep
     }
 }
 
@@ -166,14 +289,36 @@ struct FolderFanPresenter: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.dismiss()
+        // The SwiftUI tree is going away — skip the close animation
+        // and rip the window down immediately so we never orphan it.
+        coordinator.tearDown()
     }
 
     final class Coordinator: NSObject {
+        // Match the spring response + per-item stagger in
+        // `FolderFanView.fanItem(...)` so the close animation
+        // finishes right before the window is ordered out. Springs
+        // overshoot/settle past `response`, so add a small safety
+        // pad to make sure the last item is visually at rest before
+        // we tear the window down.
+        private static let animationDuration: TimeInterval = 0.25
+        private static let perItemStagger: TimeInterval = 0.02
+        private static let settleSafetyPad: TimeInterval = 0.05
+
         private var folderURL: URL = URL(fileURLWithPath: "/")
         private var items: [URL] = []
         var isPresented: Binding<Bool>
         private weak var window: NSWindow?
+        // Weak reference to the dock window so we can pair
+        // `beginInteraction()` (in `present`) with `endInteraction()`
+        // (in `tearDown`) and keep auto-hide deferred while the fan
+        // is on screen — same behavior as the grid popover and the
+        // folder list menu.
+        private weak var dockMainWindow: MainWindow?
+        private var isHoldingDockVisible = false
+        private var animationModel: FanAnimationModel?
+        private var isClosing = false
+        private var closeWorkItem: DispatchWorkItem?
         private var globalMonitor: Any?
         private var localMonitor: Any?
         private var keyMonitor: Any?
@@ -191,12 +336,57 @@ struct FolderFanPresenter: NSViewRepresentable {
         func present(relativeTo anchor: NSView) {
             guard window == nil, let anchorWindow = anchor.window else { return }
 
+            // Tell the dock to defer auto-hide while the fan is on
+            // screen. Paired with the `endInteraction()` call in
+            // `tearDown`. Without this, dragging the cursor off the
+            // tile (to click an item in the fan) lets the dock
+            // start its auto-hide animation underneath, which both
+            // looks wrong and breaks the click-through to the tile.
+            if let dockWindow = anchorWindow as? MainWindow, !isHoldingDockVisible {
+                dockWindow.beginInteraction()
+                dockMainWindow = dockWindow
+                isHoldingDockVisible = true
+            }
+
             let anchorBoundsInWindow = anchor.convert(anchor.bounds, to: nil)
             let anchorFrameInScreen = anchorWindow.convertToScreen(anchorBoundsInWindow)
+
+            // Use the screen the anchor window sits on so a multi-
+            // display setup picks up each screen's own longest side.
+            let screenFrame = anchorWindow.screen?.frame ?? NSScreen.main?.frame ?? .zero
+            let longest = max(screenFrame.width, screenFrame.height)
+
+            // Match the icon side that `FolderTileView.stack(in:)`
+            // renders inside the tile (0.82 × the tile's shorter
+            // side), so fan icons are the same visual size as the
+            // tile preview icons the user just clicked.
+            let tileSide = min(anchorFrameInScreen.width, anchorFrameInScreen.height)
+            let iconSize = tileSide * 0.82
+
+            // Pick `chromeReach` so the initial icon center lands on
+            // the tile's *center*, not above the tile. Derivation:
+            //   • view bottom in screen Y = window.originY
+            //   • initial icon center in screen Y = window.originY + iconSize/2
+            //     (icon bottom is flush with the view bottom)
+            //   • window.originY = tile.maxY + 8 - bottomPadding - chromeReach
+            // Solving `tile.midY = window.originY + iconSize/2`:
+            //   chromeReach = tile.height/2 + 8 + iconSize/2 - bottomPadding
+            let chromeReach = anchorFrameInScreen.height / 2
+                + 8
+                + iconSize / 2
+                - FolderFanView.bottomPadding
+
+            let model = FanAnimationModel()
+            self.animationModel = model
+            self.isClosing = false
 
             let rootView = FolderFanView(
                 folderURL: folderURL,
                 items: items,
+                iconSize: iconSize,
+                screenLongestDimension: longest,
+                chromeReach: chromeReach,
+                model: model,
                 onSelect: { [weak self] url in
                     NSWorkspace.shared.open(url)
                     self?.dismiss()
@@ -223,26 +413,89 @@ struct FolderFanPresenter: NSViewRepresentable {
             newWindow.hidesOnDeactivate = false
             newWindow.contentView = hostingView
 
-            // The fan is a quarter ellipse anchored at its bottom-left
-            // corner: item 0 (the closest to the tile) sits in that
-            // corner; the rest curve up and to the right. So place the
-            // window with its bottom-left half-an-item to the left of
-            // the tile center, leaving item 0 visually centered above
-            // the tile while the curve sweeps off to the right.
-            let originX = anchorFrameInScreen.midX - FolderFanView.itemBoxWidth / 2
-            let originY = anchorFrameInScreen.maxY + 8 // gap above tile top
+            // Anchor item 0's *icon center* (which sits at
+            // `anchorIconOffsetX` from the view's leading edge once
+            // the label chip is laid out on the left) directly above
+            // the tile's horizontal center, with a small gap above
+            // the tile top. The label trail extends further left of
+            // the tile; the curve sweeps off to the right. The
+            // window is shifted down by `chromeReach` so the extra
+            // bottom area overlaps the tile — that's where the items
+            // start their slide-out animation from.
+            let originX = anchorFrameInScreen.midX - FolderFanView.anchorIconOffsetX(iconSize: iconSize)
+            let originY = anchorFrameInScreen.maxY + 8 - FolderFanView.bottomPadding - chromeReach
             newWindow.setFrameOrigin(NSPoint(x: originX, y: originY))
             newWindow.orderFrontRegardless()
 
             window = newWindow
             installDismissMonitors()
+
+            // Toggle on the next runloop tick so SwiftUI renders the
+            // initial (collapsed-onto-tile) state once before the
+            // expand animation kicks in. Without the async hop the
+            // view would skip the starting frame and snap to its
+            // final positions.
+            DispatchQueue.main.async {
+                model.isExpanded = true
+            }
         }
 
+        /// Start the reverse animation; the window is ordered out
+        /// only after the per-item slide-back finishes. Idempotent
+        /// — repeated calls while closing are no-ops.
         func dismiss() {
-            guard let w = window else { return }
+            guard window != nil, !isClosing else { return }
+
+            // If we never expanded (e.g. dismiss arrived before the
+            // initial async hop) just close immediately — there's
+            // nothing to animate back from.
+            guard let model = animationModel, model.isExpanded else {
+                tearDown()
+                return
+            }
+
+            isClosing = true
             removeDismissMonitors()
-            w.orderOut(nil)
-            window = nil
+
+            // Pass clicks through during the close animation so the
+            // user isn't blocked from interacting with the dock or
+            // other apps while items slide back onto the tile.
+            window?.ignoresMouseEvents = true
+
+            model.isExpanded = false
+
+            let totalDuration = Self.animationDuration
+                + Double(max(0, items.count - 1)) * Self.perItemStagger
+                + Self.settleSafetyPad
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.tearDown()
+            }
+            closeWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration, execute: workItem)
+        }
+
+        /// Immediately tear the window down without animation. Used
+        /// on `dismantleNSView` (SwiftUI tree going away) and as the
+        /// final step of `dismiss()` after the reverse animation.
+        func tearDown() {
+            closeWorkItem?.cancel()
+            closeWorkItem = nil
+            animationModel = nil
+            removeDismissMonitors()
+
+            if let w = window {
+                w.orderOut(nil)
+                window = nil
+            }
+
+            // Release the dock auto-hide hold acquired in `present`.
+            if isHoldingDockVisible {
+                dockMainWindow?.endInteraction()
+                dockMainWindow = nil
+                isHoldingDockVisible = false
+            }
+
+            isClosing = false
 
             if isPresented.wrappedValue {
                 DispatchQueue.main.async { [isPresented] in

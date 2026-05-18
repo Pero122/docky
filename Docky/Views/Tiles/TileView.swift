@@ -190,22 +190,7 @@ struct TileView: View {
                     TileStore.shared.setFolderDisplayMode(tileID: tile.id, folderURL: folder.url, mode: .contents)
                 }
             ]),
-            .submenu(String(localized: "View Content as"), children: [
-                .action(String(localized: "Grid"), isOn: folderContentViewMode == .grid) {
-                    TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .grid)
-                },
-                .action(String(localized: "List"), isOn: folderContentViewMode == .list) {
-                    TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .list)
-                },
-                // Fan only renders when the dock sits at the bottom
-                // edge and the folder has ≤ FolderFanView.maximumItemCount
-                // items. Outside those conditions the dispatch falls
-                // back to grid, but we still expose the option so the
-                // user's choice is preserved across dock moves.
-                .action(String(localized: "Fan"), isOn: folderContentViewMode == .fan) {
-                    TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .fan)
-                }
-            ]),
+            .submenu(String(localized: "View Content as"), children: viewContentSubmenuChildren(folder: folder)),
             .submenu(String(localized: "Sort By"), children: FolderTileSortMode.allCases.map { mode in
                 .action(mode.title, isOn: folderSortMode == mode) {
                     TileStore.shared.setFolderSortMode(tileID: tile.id, folderURL: folder.url, mode: mode)
@@ -692,6 +677,12 @@ struct TileView: View {
                         // Larger folders silently fall through to the
                         // grid popover below — `>10 items → grid` is
                         // intentional per spec.
+                        // Keep the sort order as-is. The fan curve
+                        // already places item 0 at the bottom of the
+                        // arc (closest to the tile) and the last item
+                        // at the top — so the newest entry (sorted
+                        // first) sits near the tile and the oldest
+                        // ends up at the top of the fan naturally.
                         let fanItems = FolderAccessService.shared.sortedItems(
                             in: snapshotItems,
                             sortMode: folderSortMode
@@ -1471,6 +1462,19 @@ struct TileView: View {
             }
 
             if isFolderPopoverPresented {
+                // In fan mode the dismissal is animated by the fan
+                // window's own click-away monitor, which has already
+                // fired by the time this tap reaches `handleTap`.
+                // Flipping the binding here would race that animation
+                // — the tile's `isOpen` would go false and reveal
+                // the preview stack underneath while the fan items
+                // are still sliding back to the tile. Bail out and
+                // let the fan's `tearDown` flip the binding when the
+                // close animation finishes.
+                if folderContentViewMode == .fan {
+                    return
+                }
+
                 isFolderPopoverPresented = false
                 return
             }
@@ -1490,6 +1494,31 @@ struct TileView: View {
         case .spacer, .flexibleSpacer, .divider:
             return
         }
+    }
+
+    /// Children for the "View Content as" submenu on a folder tile.
+    /// Always shows Grid and List; only shows Fan when the dock is at
+    /// the bottom edge, since Fan rendering is hard-coded to sweep
+    /// upward from the tile and only works visually for `.bottom`.
+    private func viewContentSubmenuChildren(folder: FolderTile) -> [ContextAction] {
+        var children: [ContextAction] = [
+            .action(String(localized: "Grid"), isOn: folderContentViewMode == .grid) {
+                TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .grid)
+            },
+            .action(String(localized: "List"), isOn: folderContentViewMode == .list) {
+                TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .list)
+            }
+        ]
+
+        if position == .bottom {
+            children.append(
+                .action(String(localized: "Fan"), isOn: folderContentViewMode == .fan) {
+                    TileStore.shared.setFolderContentViewMode(tileID: tile.id, folderURL: folder.url, mode: .fan)
+                }
+            )
+        }
+
+        return children
     }
 
     private func appFolderContextActions(for folder: AppFolderTile) -> [ContextAction] {
@@ -2849,21 +2878,10 @@ func injectingAppWindowActions(
         }
     }
 
-    var result = actions
-    var insertionIndex = result.firstIndex { action in
-        action.kind == .submenu && action.title == "Options"
-    } ?? result.endIndex
-
-    if insertionIndex > result.startIndex, result[insertionIndex - 1].kind != .divider {
-        result.insert(.divider, at: insertionIndex)
-        insertionIndex += 1
-    }
-
-    result.insert(contentsOf: windowActions, at: insertionIndex)
-
-    let trailingDividerIndex = min(insertionIndex + windowActions.count, result.endIndex)
-    if trailingDividerIndex < result.endIndex, result[trailingDividerIndex].kind != .divider {
-        result.insert(.divider, at: trailingDividerIndex)
+    var result = windowActions
+    if !actions.isEmpty {
+        result.append(.divider)
+        result.append(contentsOf: actions)
     }
 
     while result.first?.kind == .divider {
