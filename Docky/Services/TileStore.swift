@@ -406,6 +406,26 @@ final class TileStore: ObservableObject {
             return false
         }
 
+        // Dragging an app into the dock is an explicit "show this here"
+        // gesture, so reverse a prior "Hide in Docky" if one is in effect.
+        if preferences.isAppHiddenInDocky(bundleIdentifier: bundleIdentifier) {
+            preferences.setAppHiddenInDocky(bundleIdentifier: bundleIdentifier, isHidden: false)
+        }
+
+        // If the app currently lives inside a pinned app folder, lift it
+        // out first so the rest of the flow can place it as a standalone
+        // tile. Without this `isPinned` returns true (via folder
+        // membership) but no top-level `.app` tile exists, and pinApp
+        // bails out, the drop snaps back to Finder.
+        if let folderItem = preferences.pinnedItems.first(where: {
+            $0.kind == .appFolder && $0.folderBundleIdentifiers.contains(bundleIdentifier)
+        }) {
+            removeAppFromFolder(
+                tileID: Self.pinnedTileID(for: folderItem),
+                bundleIdentifier: bundleIdentifier
+            )
+        }
+
         if !isPinned(bundleIdentifier: bundleIdentifier) {
             guard setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: true) else {
                 return false

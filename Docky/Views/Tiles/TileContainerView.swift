@@ -27,6 +27,7 @@ struct TileContainerView: View {
     @State private var draggedPinnedTileDestinationIndex: Int?
     @State private var draggedTrailingTileDestinationIndex: Int?
     @State private var draggedAppFolderTargetTileID: String?
+    @State private var draggedTrashTargetTileID: String?
     @State private var draggedAdditionalTileIDs: [String] = []
     @State private var draggedPickupCandidateTileID: String?
     @State private var tileFrames: [String: CGRect] = [:]
@@ -220,6 +221,7 @@ struct TileContainerView: View {
             tile: tile,
             isDocumentDropTarget: dockDrag.documentTargetTileID == tile.id,
             isAppFolderDropTarget: draggedAppFolderTargetTileID == tile.id,
+            isTrashDropTarget: draggedTrashTargetTileID == tile.id,
             renderedTileSize: iconSize
         )
             .frame(
@@ -1394,6 +1396,21 @@ struct TileContainerView: View {
                 )
             }
             draggedAppFolderTargetTileID = groupTargetTileID
+            draggedTrashTargetTileID = nil
+            draggedPinnedTileDestinationIndex = nil
+            draggedTrailingTileDestinationIndex = nil
+            editMode.paletteDropDestination = nil
+            return
+        }
+
+        if let trashTargetTileID = trashDropTargetTileID(at: value.location, sourceTileID: tile.id) {
+            if draggedTrashTargetTileID != trashTargetTileID {
+                Self.logger.debug(
+                    "Drag trash target tile=\(tileLogDescription(tile), privacy: .public) targetTileID=\(trashTargetTileID, privacy: .public)"
+                )
+            }
+            draggedTrashTargetTileID = trashTargetTileID
+            draggedAppFolderTargetTileID = nil
             draggedPinnedTileDestinationIndex = nil
             draggedTrailingTileDestinationIndex = nil
             editMode.paletteDropDestination = nil
@@ -1406,6 +1423,7 @@ struct TileContainerView: View {
         }
 
         draggedAppFolderTargetTileID = nil
+        draggedTrashTargetTileID = nil
         updatePreviewDestination(
             at: projected(point: value.location),
             sourceTileID: tile.id,
@@ -1432,7 +1450,16 @@ struct TileContainerView: View {
             return
         }
 
-        if let groupTargetTileID = draggedAppFolderTargetTileID,
+        if draggedTrashTargetTileID != nil {
+            Self.logger.info(
+                "Drag dropping on trash tile=\(tileLogDescription(tile), privacy: .public) pinnedSource=\(isPinnedReorderable(tileID: tile.id), privacy: .public) trailingSource=\(isTrailingReorderable(tileID: tile.id), privacy: .public)"
+            )
+            if isPinnedReorderable(tileID: tile.id) {
+                store.removePinnedItem(tileID: tile.id)
+            } else if isTrailingReorderable(tileID: tile.id) {
+                store.removeTrailingItem(tileID: tile.id)
+            }
+        } else if let groupTargetTileID = draggedAppFolderTargetTileID,
            draggedBundleIdentifier != nil {
             Self.logger.info(
                 "Drag committing group tile=\(tileLogDescription(tile), privacy: .public) targetTileID=\(groupTargetTileID, privacy: .public) selectionCount=\(draggedSelectionBundleIdentifiers.count, privacy: .public)"
@@ -1530,6 +1557,7 @@ struct TileContainerView: View {
 
     private func clearDragPreviewDestinations() {
         draggedAppFolderTargetTileID = nil
+        draggedTrashTargetTileID = nil
         draggedPinnedTileDestinationIndex = nil
         draggedTrailingTileDestinationIndex = nil
         editMode.paletteDropDestination = nil
@@ -1819,6 +1847,7 @@ struct TileContainerView: View {
         draggedPinnedTileDestinationIndex = nil
         draggedTrailingTileDestinationIndex = nil
         draggedAppFolderTargetTileID = nil
+        draggedTrashTargetTileID = nil
         draggedAdditionalTileIDs = []
         draggedPickupCandidateTileID = nil
     }
@@ -1920,6 +1949,18 @@ struct TileContainerView: View {
             }
         }
 
+        return nil
+    }
+
+    private func trashDropTargetTileID(at location: CGPoint, sourceTileID: String) -> String? {
+        for tile in trailingTiles where tile.id != sourceTileID {
+            guard case .trash = tile.content,
+                  let frame = tileFrames[tile.id],
+                  frame.contains(location) else {
+                continue
+            }
+            return tile.id
+        }
         return nil
     }
 
