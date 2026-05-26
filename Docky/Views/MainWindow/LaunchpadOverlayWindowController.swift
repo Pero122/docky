@@ -526,23 +526,40 @@ private struct LaunchpadOverlayView: View {
         }
     }
 
-    /// Loads the cached wallpaper for the screen the overlay is currently
-    /// anchored to and renders it under a heavy SwiftUI blur. The blur is
-    /// done in-window (rather than via the SkyLight backdrop on the window)
-    /// so we can guarantee that the visible base is the desktop wallpaper —
-    /// not whatever app windows happen to sit underneath.
+    /// Loads the launchpad's full-screen backdrop image. Prefers the
+    /// user-configured `launchpadBackgroundImagePath`; falls back to the
+    /// cached desktop wallpaper for the active screen. The blur is done
+    /// in-window (rather than via the SkyLight backdrop on the window)
+    /// so we can guarantee that the visible base is an image — not
+    /// whatever app windows happen to sit underneath. Blur is gated on
+    /// `launchpadBackgroundBlursImage` so a curated image can render
+    /// crisp when the user picks one.
     @ViewBuilder
     private func wallpaperBackground(in size: CGSize) -> some View {
-        if let url = overlay.wallpaperURL,
-           let image = IconCacheService.shared.image(forImageFileURL: url) {
+        if let image = launchpadBackgroundImage {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
-                .blur(radius: wallpaperBlurRadius, opaque: true)
+                .blur(radius: preferences.launchpadBackgroundBlursImage ? wallpaperBlurRadius : 0, opaque: true)
                 .clipped()
                 .allowsHitTesting(false)
         }
+    }
+
+    private var launchpadBackgroundImage: NSImage? {
+        if let path = preferences.launchpadBackgroundImagePath,
+           !path.isEmpty {
+            let url = URL(fileURLWithPath: path)
+            if let image = IconCacheService.shared.image(forImageFileURL: url) {
+                return image
+            }
+        }
+        if let url = overlay.wallpaperURL,
+           let image = IconCacheService.shared.image(forImageFileURL: url) {
+            return image
+        }
+        return nil
     }
 
     private func pageGrid(

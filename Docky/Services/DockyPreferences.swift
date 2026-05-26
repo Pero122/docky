@@ -2354,6 +2354,31 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Optional image path used as the Launchpad's full-screen
+    /// backdrop. When `nil` the launchpad falls back to the current
+    /// desktop wallpaper (the previous default).
+    var launchpadBackgroundImagePath: String? {
+        didSet {
+            guard launchpadBackgroundImagePath != oldValue else { return }
+            if let path = launchpadBackgroundImagePath, !path.isEmpty {
+                defaults.set(path, forKey: Keys.launchpadBackgroundImagePath)
+            } else {
+                defaults.removeObject(forKey: Keys.launchpadBackgroundImagePath)
+            }
+        }
+    }
+
+    /// Whether the launchpad's backdrop image (custom or desktop
+    /// wallpaper) is rendered through the heavy SwiftUI blur. Default
+    /// `true` matches the previous behavior; disabling shows the image
+    /// crisp, useful when the user picks a curated background.
+    var launchpadBackgroundBlursImage: Bool {
+        didSet {
+            guard launchpadBackgroundBlursImage != oldValue else { return }
+            defaults.set(launchpadBackgroundBlursImage, forKey: Keys.launchpadBackgroundBlursImage)
+        }
+    }
+
     /// Scroll axis for the Launchpad overlay. `.horizontal` keeps the
     /// classic Apple paged layout; `.vertical` renders a single
     /// continuous grid (matches macOS Tahoe's Apps view). Row count is
@@ -3476,6 +3501,8 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         static let launchpadGridRowCount = "docky.launchpadGridRowCount"
         static let launchpadBaseIconSize = "docky.launchpadBaseIconSize"
         static let launchpadColumnSpacing = "docky.launchpadColumnSpacing"
+        static let launchpadBackgroundImagePath = "docky.launchpadBackgroundImagePath"
+        static let launchpadBackgroundBlursImage = "docky.launchpadBackgroundBlursImage"
         static let launchpadLayoutAxis = "docky.launchpadLayoutAxis"
         static let launchpadShortcut = "docky.launchpadShortcut"
         static let enablesWindowSwitcher = "docky.enablesWindowSwitcher"
@@ -3581,6 +3608,8 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         static let launchpadColumnSpacing: CGFloat = 96
         static let launchpadSpacingMin: CGFloat = 0
         static let launchpadSpacingMax: CGFloat = 96
+        static let launchpadBackgroundImagePath: String? = nil
+        static let launchpadBackgroundBlursImage = true
         static let launchpadLayoutAxis: LaunchpadLayoutAxis = .defaultForCurrentOS
         static let launchpadShortcut = KeyboardShortcut.empty
         static let enablesWindowSwitcher = true
@@ -3701,6 +3730,8 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
         let storedLaunchpadGridRowCount = defaults.object(forKey: Keys.launchpadGridRowCount) as? Int
         let storedLaunchpadBaseIconSize = defaults.object(forKey: Keys.launchpadBaseIconSize) as? Double
         let storedLaunchpadColumnSpacing = defaults.object(forKey: Keys.launchpadColumnSpacing) as? Double
+        let storedLaunchpadBackgroundImagePath = defaults.string(forKey: Keys.launchpadBackgroundImagePath)
+        let storedLaunchpadBackgroundBlursImage = defaults.object(forKey: Keys.launchpadBackgroundBlursImage) as? Bool
         let storedLaunchpadLayoutAxis = defaults.string(forKey: Keys.launchpadLayoutAxis)
         let storedLaunchpadShortcut = defaults.data(forKey: Keys.launchpadShortcut)
         let storedEnablesWindowSwitcher = defaults.object(forKey: Keys.enablesWindowSwitcher) as? Bool
@@ -3841,6 +3872,8 @@ enum LaunchpadLayoutAxis: String, CaseIterable, Codable, Identifiable {
             ),
             DefaultValues.launchpadSpacingMax
         )
+        self.launchpadBackgroundImagePath = storedLaunchpadBackgroundImagePath
+        self.launchpadBackgroundBlursImage = storedLaunchpadBackgroundBlursImage ?? DefaultValues.launchpadBackgroundBlursImage
         self.launchpadLayoutAxis = storedLaunchpadLayoutAxis
             .flatMap(LaunchpadLayoutAxis.init(rawValue:))
             ?? DefaultValues.launchpadLayoutAxis
