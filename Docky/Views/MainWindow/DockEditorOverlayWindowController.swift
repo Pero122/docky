@@ -519,7 +519,7 @@ private final class DockEditorOverlayWindow: NSWindow {
 private struct DockEditorOverlayView: View {
     @ObservedObject var state: DockEditorOverlayState
     @ObservedObject private var editMode = DockEditModeService.shared
-    @ObservedObject private var dockSettings = DockSettingsService.shared
+    private let dockSettings = DockSettingsService.shared
     @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {

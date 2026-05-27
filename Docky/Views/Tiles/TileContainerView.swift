@@ -13,13 +13,13 @@ struct TileContainerView: View {
     private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileDrag")
 
     @ObservedObject private var store = TileStore.shared
-    @ObservedObject private var dockSettings = DockSettingsService.shared
+    private let dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var product = ProductService.shared
     @ObservedObject private var dockDrag = DockDragService.shared
-    @ObservedObject private var magnification = DockMagnificationService.shared
+    private let magnification = DockMagnificationService.shared
 
     @State private var draggedTileID: String?
     @State private var draggedTileOffset: CGFloat = 0

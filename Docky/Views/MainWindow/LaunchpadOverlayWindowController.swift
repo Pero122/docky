@@ -871,9 +871,28 @@ private struct LaunchpadOverlayView: View {
             }
         )
         .contextMenu {
-            if case .folder(let folder) = entry, !isSearching {
+            switch entry {
+            case .app(let app) where !isSearching:
+                appContextMenu(for: app)
+            case .folder(let folder) where !isSearching:
                 folderContextMenu(for: folder)
+            default:
+                EmptyView()
             }
+        }
+    }
+
+    /// Right-click menu for app cells. Today this is just the dock
+    /// pin/unpin toggle; future additions (show in Finder, hide app,
+    /// reveal info) plug in here.
+    @ViewBuilder
+    private func appContextMenu(for app: AppTile) -> some View {
+        let isPinned = TileStore.shared.isPinned(bundleIdentifier: app.bundleIdentifier)
+        Button(isPinned ? "Remove from Docky" : "Add to Docky") {
+            _ = TileStore.shared.setPinnedApp(
+                bundleIdentifier: app.bundleIdentifier,
+                pinned: !isPinned
+            )
         }
     }
 

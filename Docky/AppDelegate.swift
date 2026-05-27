@@ -958,11 +958,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         .store(in: &debugSnapshotCancellables)
 
-        DockSettingsService.shared.objectWillChange
-            .sink { [weak self] _ in
-                self?.refreshDebugSnapshotText()
-            }
-            .store(in: &debugSnapshotCancellables)
+        observeChanges { [weak self] in
+            // Touch the properties the debug snapshot prints so the
+            // Observation framework wires this closure to re-fire on
+            // every relevant DockSettingsService change.
+            let settings = DockSettingsService.shared
+            _ = settings.orientation
+            _ = settings.tileSize
+            _ = settings.largeSize
+            _ = settings.magnification
+            _ = settings.autohide
+            _ = settings.autohideDelay
+            _ = settings.autohideTimeModifier
+            _ = settings.minimizeEffect
+            _ = settings.minimizeToApplication
+            _ = settings.showRecents
+            _ = settings.showProcessIndicators
+            self?.refreshDebugSnapshotText()
+        }
+        .store(in: &debugSnapshotCancellables)
     }
 
     private func refreshDebugSnapshotText() {

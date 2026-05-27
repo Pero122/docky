@@ -25,7 +25,7 @@ struct TileView: View {
     /// the rendered frame instead of staying at the resting tile size.
     /// `nil` falls back to the shared `DockLayoutService` size.
     let renderedTileSize: CGFloat?
-    @ObservedObject private var dockSettings = DockSettingsService.shared
+    private let dockSettings = DockSettingsService.shared
     @ObservedObject private var layout = DockLayoutService.shared
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var product = ProductService.shared
@@ -67,7 +67,6 @@ struct TileView: View {
         self.isAppFolderDropTarget = isAppFolderDropTarget
         self.isTrashDropTarget = isTrashDropTarget
         self.renderedTileSize = renderedTileSize
-        self._dockSettings = ObservedObject(wrappedValue: DockSettingsService.shared)
         self._layout = ObservedObject(wrappedValue: DockLayoutService.shared)
         self._preferences = Bindable(wrappedValue: DockyPreferences.shared)
         self._product = ObservedObject(wrappedValue: ProductService.shared)
