@@ -228,6 +228,11 @@ private struct LaunchpadDragState: Equatable {
     /// When non-nil the drag is hovering over a single cell long
     /// enough to convert from a reorder into a folder merge.
     var mergeTargetItemID: String?
+    /// Resting cell geometry captured at drag-start. Hit-testing uses
+    /// this frozen grid instead of the live frames, which reflow as the
+    /// preview shifts tiles aside — resolving against moving geometry is
+    /// what makes a near-stationary cursor flicker between two indices.
+    let frameSnapshot: [String: CGRect]
 }
 
 /// Preference key that aggregates per-cell frames keyed by layout id.
@@ -270,6 +275,12 @@ private struct LaunchpadOverlayView: View {
 
     private static let launchpadGridCoordinateSpace = "launchpadGrid"
     private let mergeDwellDuration: TimeInterval = 0.45
+    /// Deadband around a cell's midpoint, as a fraction of cell width,
+    /// before the reorder commits to the other side. Prevents the
+    /// dragged tile from oscillating at a boundary: the live grid reflow
+    /// keeps sliding a new midpoint under a near-stationary cursor, and
+    /// without this margin sub-pixel jitter flips the index every frame.
+    private static let reorderHysteresisFraction: CGFloat = 0.25
 
     private let searchBarWidth: CGFloat = 280
     private let searchBarTopInset: CGFloat = 56
@@ -959,13 +970,14 @@ private struct LaunchpadOverlayView: View {
                 originIndex: originIndex,
                 targetIndex: originIndex,
                 location: value.location,
-                mergeTargetItemID: nil
+                mergeTargetItemID: nil,
+                frameSnapshot: cellFrames
             )
         }
 
         guard var state = dragState else { return }
         state.location = value.location
-        let resolution = resolveDropTarget(at: value.location, draggedLayoutID: layoutID)
+        let resolution = resolveDropTarget(at: value.location, draggedLayoutID: layoutID, currentInsertion: state.targetIndex, frames: state.frameSnapshot)
         let hoveredID = resolution.directHitID
 
         if let merge = state.mergeTargetItemID, merge == hoveredID {
@@ -1056,13 +1068,13 @@ private struct LaunchpadOverlayView: View {
     /// cursor is directly over (if any). Reorder consumes the index on
     /// every move; the directly-hit tile only matters as the dwell
     /// candidate for a folder merge.
-    private func resolveDropTarget(at location: CGPoint, draggedLayoutID: String) -> DropResolution {
+    private func resolveDropTarget(at location: CGPoint, draggedLayoutID: String, currentInsertion: Int, frames: [String: CGRect]) -> DropResolution {
         let entries = filteredEntries
         guard !entries.isEmpty else { return DropResolution(insertionIndex: 0, directHitID: nil) }
 
         // Find which cell the cursor is over (excluding the dragged
         // cell so it doesn't keep flagging itself as a merge candidate).
-        let frames = cellFrames
+        // `frames` is the drag-start snapshot, not the live reflowing grid.
         var directHit: (entryIndex: Int, frame: CGRect, id: String)?
         var nearestHit: (entryIndex: Int, frame: CGRect, id: String, distance: CGFloat)?
 
@@ -1087,11 +1099,22 @@ private struct LaunchpadOverlayView: View {
         guard let hit else { return DropResolution(insertionIndex: entries.count, directHitID: nil) }
 
         // Insertion index: before this cell if cursor left of midX,
-        // after otherwise. The caller adjusts for the dragged item's
-        // own position when rendering the preview. `directHitID` is only
-        // populated on a real containment hit so the dwell timer never
-        // arms on a tile the cursor is merely near.
-        let insertion = location.x < hit.frame.midX ? hit.entryIndex : hit.entryIndex + 1
+        // after otherwise, with a hysteresis deadband around the midpoint
+        // so a near-stationary cursor doesn't flip sides every frame.
+        // `directHitID` is only populated on a real containment hit so the
+        // dwell timer never arms on a tile the cursor is merely near.
+        let margin = hit.frame.width * Self.reorderHysteresisFraction
+        let insertion: Int
+        if location.x < hit.frame.midX - margin {
+            insertion = hit.entryIndex
+        } else if location.x > hit.frame.midX + margin {
+            insertion = hit.entryIndex + 1
+        } else if currentInsertion == hit.entryIndex || currentInsertion == hit.entryIndex + 1 {
+            // Inside the deadband: hold whichever side is already committed.
+            insertion = currentInsertion
+        } else {
+            insertion = location.x < hit.frame.midX ? hit.entryIndex : hit.entryIndex + 1
+        }
         return DropResolution(insertionIndex: insertion, directHitID: directHit?.id)
     }
 
@@ -1759,6 +1782,9 @@ private struct FolderReorderDragState: Equatable {
     let originIndex: Int
     var targetIndex: Int
     var location: CGPoint
+    /// Resting cell geometry captured at drag-start, see
+    /// `LaunchpadDragState.frameSnapshot`.
+    let frameSnapshot: [String: CGRect]
 }
 
 private struct ExpandedFolderOverlay: View {
@@ -1797,6 +1823,9 @@ private struct ExpandedFolderOverlay: View {
     @State private var reorderDragState: FolderReorderDragState?
     @State private var cellFrames: [String: CGRect] = [:]
     @FocusState private var isRenameFieldFocused: Bool
+    /// See `LaunchpadOverlayView.reorderHysteresisFraction`: deadband around
+    /// a cell midpoint that stops the dragged app oscillating at a boundary.
+    private static let reorderHysteresisFraction: CGFloat = 0.25
 
     private static let gridCoordinateSpace = "launchpadFolderGrid"
     private let titleSpacing: CGFloat = 20
@@ -2048,12 +2077,13 @@ private struct ExpandedFolderOverlay: View {
                 bundleIdentifier: bundleIdentifier,
                 originIndex: originIndex,
                 targetIndex: originIndex,
-                location: value.location
+                location: value.location,
+                frameSnapshot: cellFrames
             )
         }
         guard var state = reorderDragState else { return }
         state.location = value.location
-        state.targetIndex = folderInsertionIndex(at: value.location, draggedBundleID: bundleIdentifier)
+        state.targetIndex = folderInsertionIndex(at: value.location, draggedBundleID: bundleIdentifier, currentInsertion: state.targetIndex, frames: state.frameSnapshot)
         withAnimation(.spring(duration: 0.32, bounce: 0.18)) {
             reorderDragState = state
         }
@@ -2077,7 +2107,7 @@ private struct ExpandedFolderOverlay: View {
     /// Post-removal insertion index for the cursor location, resolved
     /// against the captured cell frames. No merge band — folders can't
     /// nest, so this is pure reorder.
-    private func folderInsertionIndex(at location: CGPoint, draggedBundleID: String) -> Int {
+    private func folderInsertionIndex(at location: CGPoint, draggedBundleID: String, currentInsertion: Int, frames: [String: CGRect]) -> Int {
         let apps = folder.apps
         guard !apps.isEmpty else { return 0 }
 
@@ -2085,7 +2115,7 @@ private struct ExpandedFolderOverlay: View {
         var nearestHit: (index: Int, frame: CGRect, distance: CGFloat)?
         for (index, app) in apps.enumerated() {
             guard app.bundleIdentifier != draggedBundleID,
-                  let frame = cellFrames[app.bundleIdentifier] else { continue }
+                  let frame = frames[app.bundleIdentifier] else { continue }
             if frame.contains(location) {
                 directHit = (index, frame)
                 break
@@ -2100,7 +2130,20 @@ private struct ExpandedFolderOverlay: View {
 
         let hit = directHit ?? nearestHit.map { (index: $0.index, frame: $0.frame) }
         guard let hit else { return apps.count - 1 }
-        let insertion = location.x < hit.frame.midX ? hit.index : hit.index + 1
+        // Hysteresis deadband around the midpoint, matching the top-level
+        // reorder, so a near-stationary cursor doesn't flip sides as the
+        // grid reflows under it.
+        let margin = hit.frame.width * Self.reorderHysteresisFraction
+        let insertion: Int
+        if location.x < hit.frame.midX - margin {
+            insertion = hit.index
+        } else if location.x > hit.frame.midX + margin {
+            insertion = hit.index + 1
+        } else if currentInsertion == hit.index || currentInsertion == hit.index + 1 {
+            insertion = currentInsertion
+        } else {
+            insertion = location.x < hit.frame.midX ? hit.index : hit.index + 1
+        }
         return max(0, min(insertion, apps.count - 1))
     }
 
