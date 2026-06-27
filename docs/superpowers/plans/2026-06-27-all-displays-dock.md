@@ -33,6 +33,8 @@
 
 ## Task 1: Add the `.allDisplays` enum case (compiles, behaves like primary)
 
+> **✅ COMPLETE** — shipped in `38dff25`. Builds clean (Xcode 26.6, ad-hoc). Visual check (option appears in picker) folded into Task 3 payoff.
+
 **Files:**
 - Modify: `Docky/Services/DockyPreferences.swift:438-450`
 - Modify: `Docky/Views/MainWindow/MainWindow.swift:972-983` (the `targetScreen()` switch — adding an enum case makes this switch non-exhaustive → compile error, so it must be handled here)
@@ -41,7 +43,7 @@
 **Interfaces:**
 - Produces: `DockWindowDisplayTarget.allDisplays` (new case, raw value `"allDisplays"`, title `"All Displays"`). Later tasks branch on this case.
 
-- [ ] **Step 1: Add the enum case + title**
+- [x] **Step 1: Add the enum case + title**
 
 In `Docky/Services/DockyPreferences.swift`, change the enum (lines 438-450) to:
 
@@ -63,7 +65,7 @@ enum DockWindowDisplayTarget: String, CaseIterable, Identifiable {
 }
 ```
 
-- [ ] **Step 2: Make `targetScreen()` exhaustive (placeholder = primary)**
+- [x] **Step 2: Make `targetScreen()` exhaustive (placeholder = primary)**
 
 In `Docky/Views/MainWindow/MainWindow.swift`, the `targetScreen()` switch (lines 972-983) is now non-exhaustive. Add the `.allDisplays` case so it compiles. For this task it returns the primary screen (real per-screen pinning comes in Task 2):
 
@@ -85,7 +87,7 @@ private func targetScreen() -> NSScreen? {
 }
 ```
 
-- [ ] **Step 3: Update the settings help text**
+- [x] **Step 3: Update the settings help text**
 
 In `Docky/Views/SettingsWindow/BehaviorSettingsView.swift`, the help `Text` (line ~121) currently says "Docky uses a single main window...". Replace with:
 
@@ -97,11 +99,11 @@ In `Docky/Views/SettingsWindow/BehaviorSettingsView.swift`, the help `Text` (lin
 
 The Picker itself needs no change — it iterates `DockWindowDisplayTarget.allCases`, so "All Displays" appears automatically.
 
-- [ ] **Step 4: Build + observe**
+- [x] **Step 4: Build + observe**
 
 Build (Xcode Cmd-B, or `xcodebuild -project Docky.xcodeproj -scheme Docky -configuration Debug build`). Expected: **builds with no errors.** Run the app, open Settings → Behavior → Display. Expected: the Picker now lists **"All Displays"**. Selecting it shows a single dock on the primary display (placeholder behavior — correct for this task).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Docky/Services/DockyPreferences.swift Docky/Views/MainWindow/MainWindow.swift Docky/Views/SettingsWindow/BehaviorSettingsView.swift
@@ -121,7 +123,7 @@ git commit -m "feat(display): add All Displays target option (placeholder behavi
   - `MainWindow.assignedScreen: NSScreen?` — when non-nil, this window renders on that exact screen.
   - `NSScreen.displayID: CGDirectDisplayID?` — stable display identity used by Task 3 to key windows.
 
-- [ ] **Step 1: Add a stable screen-identity helper**
+- [x] **Step 1: Add a stable screen-identity helper**
 
 In `Docky/Views/MainWindow/MainWindow.swift`, add near the top (after imports, file scope):
 
@@ -137,7 +139,7 @@ extension NSScreen {
 }
 ```
 
-- [ ] **Step 2: Add the `assignedScreen` property**
+- [x] **Step 2: Add the `assignedScreen` property**
 
 Inside `final class MainWindow: NSPanel`, add a stored property (near `static var allowsKeyWindow`):
 
@@ -149,7 +151,7 @@ Inside `final class MainWindow: NSPanel`, add a stored property (near `static va
     var assignedScreen: NSScreen?
 ```
 
-- [ ] **Step 3: Honor `assignedScreen` in `targetScreen()`**
+- [x] **Step 3: Honor `assignedScreen` in `targetScreen()`**
 
 Update `targetScreen()` so a pinned window always resolves to its assigned screen, regardless of the global preference:
 
@@ -175,11 +177,11 @@ private func targetScreen() -> NSScreen? {
 }
 ```
 
-- [ ] **Step 4: Build + observe (no behavior change expected)**
+- [x] **Step 4: Build + observe (no behavior change expected)**
 
 Build + run. `assignedScreen` is `nil` everywhere so far, so behavior is identical to Task 1: single dock, all three display modes work as before. Expected: **builds; no visible change.** This task is pure enabling infrastructure.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Docky/Views/MainWindow/MainWindow.swift
@@ -197,7 +199,7 @@ git commit -m "feat(display): pin MainWindow to an assignedScreen + stable displ
 - Consumes: `MainWindow.assignedScreen`, `NSScreen.displayID` (Task 2); `makeMainWindowController()` (existing, AppDelegate.swift:354-370); `DockWindowDisplayTarget.allDisplays` (Task 1).
 - Produces: `AppDelegate.syncDockWindowsToScreens()` — reconciles live dock windows to `NSScreen.screens` per the current `windowDisplayTarget`. Task 4 calls it from observers.
 
-- [ ] **Step 1: Add the per-screen controller store**
+- [x] **Step 1: Add the per-screen controller store**
 
 In `Docky/AppDelegate.swift`, next to the existing `mainWindowController` property (line 19), add:
 
@@ -208,7 +210,7 @@ In `Docky/AppDelegate.swift`, next to the existing `mainWindowController` proper
     private var perScreenControllers: [CGDirectDisplayID: MainWindowController] = [:]
 ```
 
-- [ ] **Step 2: Add `syncDockWindowsToScreens()`**
+- [x] **Step 2: Add `syncDockWindowsToScreens()`**
 
 Add this method to `AppDelegate`:
 
@@ -255,7 +257,7 @@ Add this method to `AppDelegate`:
     }
 ```
 
-- [ ] **Step 3: Route startup through the sync**
+- [x] **Step 3: Route startup through the sync**
 
 In `showMainWindow()` (lines 347-352), replace the unconditional single-window creation so startup respects `.allDisplays`:
 
@@ -268,13 +270,13 @@ private func showMainWindow() {
 
 (`syncDockWindowsToScreens()` creates `mainWindowController` in single-dock mode, or the per-screen set in `.allDisplays` mode.)
 
-- [ ] **Step 4: Build + observe — THE payoff**
+- [x] **Step 4: Build + observe — THE payoff**
 
 Build + run. In Settings → Behavior → Display, select **"All Displays"**. Expected: **a dock appears on all 3 monitors at once.** Switch back to "Primary Display" → only the primary keeps a dock. Switch to "All Displays" again → 3 docks return.
 
 > Note: switching the picker may require the wiring in Task 4 to re-sync live. If the docks don't update immediately on picker change yet, quit + relaunch with "All Displays" already selected to confirm the per-screen creation works. Task 4 makes it live.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Docky/AppDelegate.swift
@@ -291,7 +293,7 @@ git commit -m "feat(display): create one pinned dock per screen in All Displays 
 **Interfaces:**
 - Consumes: `syncDockWindowsToScreens()` (Task 3).
 
-- [ ] **Step 1: Re-sync on display configuration change**
+- [x] **Step 1: Re-sync on display configuration change**
 
 In `AppDelegate` (in `applicationDidFinishLaunching()`, after `showMainWindow()` at line 63, or wherever observers are set up), register:
 
@@ -305,7 +307,7 @@ In `AppDelegate` (in `applicationDidFinishLaunching()`, after `showMainWindow()`
         }
 ```
 
-- [ ] **Step 2: Re-sync when the user changes the Display preference**
+- [x] **Step 2: Re-sync when the user changes the Display preference**
 
 `DockyPreferences.windowDisplayTarget` is a plain property writing to `UserDefaults` (key `"docky.windowDisplayTarget"`). Observe the default-change notification so flipping the picker rebuilds docks live. Add in the same observer-setup location:
 
@@ -321,14 +323,14 @@ In `AppDelegate` (in `applicationDidFinishLaunching()`, after `showMainWindow()`
 
 > If `UserDefaults.didChangeNotification` proves too chatty (fires for every preference), narrow it: cache the last `windowDisplayTarget` in an instance var and early-return from `syncDockWindowsToScreens()` if neither the target nor `NSScreen.screens.count` changed. Add that guard only if you observe churn.
 
-- [ ] **Step 3: Build + observe — live switching + hot-plug**
+- [x] **Step 3: Build + observe — live switching + hot-plug**
 
 Build + run. Test:
 1. Flip Display picker between "All Displays" and "Primary Display" → docks appear/disappear **without relaunch**.
 2. With "All Displays" active, **unplug a monitor** → its dock vanishes, others remain. **Replug** → its dock returns.
 Expected: all transitions are clean, no orphaned/duplicate docks.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Docky/AppDelegate.swift
