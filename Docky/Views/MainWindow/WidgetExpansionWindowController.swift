@@ -59,7 +59,11 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
         pendingDismissTask = nil
         dismissAnimationTask?.cancel()
         dismissAnimationTask = nil
-        beginDockVisibilityHoldIfNeeded()
+
+        // Resolve the originating dock once (only on hover-expansion appear,
+        // never per frame) so multi-display expansions pin to the right screen.
+        let originatingDock = MainWindow.dockUnderCursor()
+        beginDockVisibilityHoldIfNeeded(for: originatingDock)
 
         let resolvedTileSize = max(1, min(
             sourceFrame.height,
@@ -105,7 +109,7 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
             WidgetExpansionWindowController.shared.setPreviewHovered(isHovering, sourceTileID: sourceTileID)
         }
 
-        let finalOrigin = frameOrigin(for: windowSize, sourceFrame: sourceFrame)
+        let finalOrigin = frameOrigin(for: windowSize, sourceFrame: sourceFrame, dockFrame: originatingDock?.frame)
         let slide = slideOffsetVector()
         let initialOrigin = CGPoint(x: finalOrigin.x + slide.x, y: finalOrigin.y + slide.y)
         let finalFrame = CGRect(origin: finalOrigin, size: windowSize)
@@ -185,12 +189,12 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
         }
     }
 
-    private func beginDockVisibilityHoldIfNeeded() {
+    private func beginDockVisibilityHoldIfNeeded(for dock: MainWindow?) {
         guard !isHoldingDockVisible else { return }
-        guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first else { return }
+        guard let dock else { return }
 
-        mainWindow.beginInteraction()
-        heldMainWindow = mainWindow
+        dock.beginInteraction()
+        heldMainWindow = dock
         isHoldingDockVisible = true
     }
 
@@ -202,8 +206,8 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
         isHoldingDockVisible = false
     }
 
-    private func frameOrigin(for size: CGSize, sourceFrame originalSourceFrame: CGRect) -> CGPoint {
-        let sourceFrame = convertToScreen(originalSourceFrame)
+    private func frameOrigin(for size: CGSize, sourceFrame originalSourceFrame: CGRect, dockFrame: CGRect?) -> CGPoint {
+        let sourceFrame = convertToScreen(originalSourceFrame, dockFrame: dockFrame)
         let screen = NSScreen.screens.first { $0.visibleFrame.intersects(sourceFrame) } ?? NSScreen.main
         guard let visibleFrame = screen?.visibleFrame else {
             return CGPoint(x: sourceFrame.midX - size.width / 2, y: sourceFrame.maxY)
@@ -243,16 +247,9 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
         min(max(value, lower), upper)
     }
 
-    private func convertToScreen(_ frame: CGRect) -> CGRect {
-        guard let dockFrame = NSApp.windows.compactMap({ $0 as? MainWindow }).first?.frame else {
-            return frame
-        }
-        return CGRect(
-            x: dockFrame.minX + frame.minX,
-            y: dockFrame.maxY - frame.maxY,
-            width: frame.width,
-            height: frame.height
-        )
+    private func convertToScreen(_ frame: CGRect, dockFrame: CGRect?) -> CGRect {
+        guard let dockFrame else { return frame }
+        return DockHoverGeometry.convertToScreen(frame, dockFrame: dockFrame)
     }
 
     private var dockEdge: NSRectEdge {

@@ -1091,3 +1091,21 @@ final class MainWindow: NSPanel {
             && abs(a.height - b.height) < tolerance
     }
 }
+
+extension MainWindow {
+    /// Every live dock window. In `.allDisplays` mode there is one per screen.
+    static var allDockWindows: [MainWindow] {
+        NSApp.windows.compactMap { $0 as? MainWindow }
+    }
+
+    /// The dock window the cursor is currently over, else the first dock
+    /// (single-display fallback). Hover-driven overlays (window previews,
+    /// widget expansions) resolve their originating dock through this so they
+    /// convert coordinates against — and pin themselves to — the correct
+    /// display. See `DockHoverGeometry.dockFrame(under:candidates:)`.
+    static func dockUnderCursor() -> MainWindow? {
+        let docks = allDockWindows
+        let cursor = NSEvent.mouseLocation
+        return docks.first { $0.frame.contains(cursor) } ?? docks.first
+    }
+}
