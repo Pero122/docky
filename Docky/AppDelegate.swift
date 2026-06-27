@@ -17,6 +17,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @IBOutlet var window: NSWindow!
     private var mainWindowController: MainWindowController?
+
+    /// `.allDisplays` mode: one dock controller per screen, keyed by stable
+    /// display ID. Empty in single-dock modes. The existing
+    /// `mainWindowController` remains the single-dock instance.
+    private var perScreenControllers: [CGDirectDisplayID: MainWindowController] = [:]
+
+    /// Last display target a dock sync ran for. Used to ignore the noisy
+    /// `UserDefaults.didChangeNotification` (fires on every preference write)
+    /// and only rebuild docks when the Display target itself changed.
+    private var lastSyncedDisplayTarget: DockWindowDisplayTarget?
     private var permissionsWindowController: PermissionsWindowController?
     private var settingsWindowController: SettingsWindowController?
     private var debugSnapshotWindowController: NSWindowController?
@@ -67,6 +77,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 marksInitialOnboardingCompleted: true,
                 showsMainWindowOnCompletion: true
             )
+        }
+
+        // Rebuild the dock set live when displays are added/removed/rearranged...
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncDockWindowsToScreens()
+        }
+
+        // ...and when the user flips the Display target in Settings. The
+        // preference writes to UserDefaults, whose change notification is
+        // noisy (every preference write), so only act on a real target change.
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self,
+                  DockyPreferences.shared.windowDisplayTarget != self.lastSyncedDisplayTarget
+            else { return }
+            self.syncDockWindowsToScreens()
         }
     }
 
@@ -137,8 +170,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
 
         switch action {
-        case "install-widget":
-            handleInstallWidgetURL(url)
+        // SECURITY (fork hardening): `docky://install-widget?url=<https>` was a
+        // remotely-triggerable drive-by install (any HTTPS host, no checksum,
+        // bundle executed at next launch). Route removed — such URLs now fall
+        // through to `default` and are ignored.
         case "launchpad":
             applyOverlayAction(
                 path: path,
@@ -343,9 +378,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showMainWindow() {
-        mainWindowController = makeMainWindowController()
-        mainWindowController?.showWindow(self)
+        syncDockWindowsToScreens()
         DockyPreferences.shared.enableOpenAtLoginOnFirstLaunchIfNeeded()
+    }
+
+    /// Reconcile live dock windows to the current display configuration and
+    /// `windowDisplayTarget`. Idempotent — safe to call on launch, on
+    /// `didChangeScreenParametersNotification`, and on preference change.
+    func syncDockWindowsToScreens() {
+        lastSyncedDisplayTarget = DockyPreferences.shared.windowDisplayTarget
+
+        guard DockyPreferences.shared.windowDisplayTarget == .allDisplays else {
+            // Single-dock mode: tear down per-screen docks, restore the one dock.
+            for controller in perScreenControllers.values { controller.close() }
+            perScreenControllers.removeAll()
+            if mainWindowController == nil {
+                mainWindowController = makeMainWindowController()
+            }
+            mainWindowController?.showWindow(self)
+            return
+        }
+
+        // .allDisplays: ensure exactly one pinned dock per connected screen.
+        var liveIDs = Set<CGDirectDisplayID>()
+        for screen in NSScreen.screens {
+            guard let id = screen.displayID else { continue }
+            liveIDs.insert(id)
+
+            if let existing = perScreenControllers[id] {
+                // NSScreen objects are recreated on reconfig — refresh the pin.
+                (existing.window as? MainWindow)?.assignedScreen = screen
+            } else if let controller = makeMainWindowController() {
+                (controller.window as? MainWindow)?.assignedScreen = screen
+                controller.showWindow(self)
+                perScreenControllers[id] = controller
+            }
+        }
+
+        // Close docks for displays that were disconnected.
+        for (id, controller) in perScreenControllers where !liveIDs.contains(id) {
+            controller.close()
+            perScreenControllers.removeValue(forKey: id)
+        }
+
+        // Hide the single-dock instance — per-screen docks cover every display.
+        mainWindowController?.window?.orderOut(nil)
     }
 
     private func makeMainWindowController() -> MainWindowController? {

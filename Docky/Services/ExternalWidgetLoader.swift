@@ -66,19 +66,13 @@ final class ExternalWidgetLoader {
     /// when the user isn't on Pro the discovery pass is skipped so
     /// nothing in the dock layout silently uses a third-party widget.
     func discoverAndLoad() {
-        guard !hasDiscovered else { return }
-        hasDiscovered = true
-
-        let directory = widgetsDirectory
-        ensureDirectoryExists(directory)
-
-
-        let urls = installedBundleURLs()
-        log.info("Scanning \(directory.path, privacy: .public) found \(urls.count) bundle(s)")
-
-        for url in urls {
-            loadBundle(at: url)
-        }
+        // SECURITY (fork hardening): external `.dockywidget` bundles loaded as
+        // native code with library validation disabled, no code-signature
+        // check, and only-optional checksums (per security audit). DISABLED in
+        // this fork — no third-party widget code is ever loaded. Do not
+        // re-enable without mandatory Developer-ID signature + checksum
+        // verification and an explicit user opt-in.
+        return
     }
 
     /// Public for the settings pane: lists every `*.dockywidget` file on
