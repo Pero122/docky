@@ -120,7 +120,7 @@ struct BehaviorSettingsView: View {
                     .labelsHidden()
                 }
 
-                Text("Docky uses a single main window. Choose whether it stays on the primary display or follows the display containing the pointer.")
+                Text("Choose whether the dock stays on the primary display, follows the display containing the pointer, or appears on all displays at once.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -979,6 +979,9 @@ final class MainWindow: NSPanel {
                 ?? screen
                 ?? NSScreen.main
                 ?? NSScreen.screens.first
+        case .allDisplays:
+            // Placeholder until Task 2 introduces per-window `assignedScreen`.
+            return NSScreen.screens.first ?? NSScreen.main
         }
     }
 

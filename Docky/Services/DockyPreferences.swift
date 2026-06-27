@@ -438,6 +438,7 @@ enum DockWindowPosition: String, CaseIterable, Identifiable {
 enum DockWindowDisplayTarget: String, CaseIterable, Identifiable {
     case primaryDisplay
     case displayContainingPointer
+    case allDisplays
 
     var id: String { rawValue }
 
@@ -445,6 +446,7 @@ enum DockWindowDisplayTarget: String, CaseIterable, Identifiable {
         switch self {
         case .primaryDisplay: String(localized: "Primary Display")
         case .displayContainingPointer: String(localized: "Display With Pointer")
+        case .allDisplays: String(localized: "All Displays")
         }
     }
 }
