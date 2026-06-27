@@ -17,6 +17,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @IBOutlet var window: NSWindow!
     private var mainWindowController: MainWindowController?
+
+    /// `.allDisplays` mode: one dock controller per screen, keyed by stable
+    /// display ID. Empty in single-dock modes. The existing
+    /// `mainWindowController` remains the single-dock instance.
+    private var perScreenControllers: [CGDirectDisplayID: MainWindowController] = [:]
     private var permissionsWindowController: PermissionsWindowController?
     private var settingsWindowController: SettingsWindowController?
     private var debugSnapshotWindowController: NSWindowController?
@@ -345,9 +350,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showMainWindow() {
-        mainWindowController = makeMainWindowController()
-        mainWindowController?.showWindow(self)
+        syncDockWindowsToScreens()
         DockyPreferences.shared.enableOpenAtLoginOnFirstLaunchIfNeeded()
+    }
+
+    /// Reconcile live dock windows to the current display configuration and
+    /// `windowDisplayTarget`. Idempotent — safe to call on launch, on
+    /// `didChangeScreenParametersNotification`, and on preference change.
+    func syncDockWindowsToScreens() {
+        guard DockyPreferences.shared.windowDisplayTarget == .allDisplays else {
+            // Single-dock mode: tear down per-screen docks, restore the one dock.
+            for controller in perScreenControllers.values { controller.close() }
+            perScreenControllers.removeAll()
+            if mainWindowController == nil {
+                mainWindowController = makeMainWindowController()
+            }
+            mainWindowController?.showWindow(self)
+            return
+        }
+
+        // .allDisplays: ensure exactly one pinned dock per connected screen.
+        var liveIDs = Set<CGDirectDisplayID>()
+        for screen in NSScreen.screens {
+            guard let id = screen.displayID else { continue }
+            liveIDs.insert(id)
+
+            if let existing = perScreenControllers[id] {
+                // NSScreen objects are recreated on reconfig — refresh the pin.
+                (existing.window as? MainWindow)?.assignedScreen = screen
+            } else if let controller = makeMainWindowController() {
+                (controller.window as? MainWindow)?.assignedScreen = screen
+                controller.showWindow(self)
+                perScreenControllers[id] = controller
+            }
+        }
+
+        // Close docks for displays that were disconnected.
+        for (id, controller) in perScreenControllers where !liveIDs.contains(id) {
+            controller.close()
+            perScreenControllers.removeValue(forKey: id)
+        }
+
+        // Hide the single-dock instance — per-screen docks cover every display.
+        mainWindowController?.window?.orderOut(nil)
     }
 
     private func makeMainWindowController() -> MainWindowController? {
