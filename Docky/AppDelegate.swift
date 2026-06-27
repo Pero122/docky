@@ -35,6 +35,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var debugSnapshotCancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // First thing: wire up crash + lifecycle diagnostics so any launch
+        // failure (esp. the multi-display AttributeGraph abort) is logged.
+        Diagnostics.bootstrap()
+
         // Bound every AX call to 1s so a hung app can't stall the main run loop.
         // Must precede any other AX work — applies process-wide.
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
@@ -67,11 +71,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         ProfileTriggerEngine.shared.start()
 
         PermissionsService.shared.refresh()
+        Diagnostics.logPermissionState()
 
         if PermissionsService.shared.setupComplete {
+            Diagnostics.breadcrumb("setupComplete=true → showMainWindow() (build docks now)")
             PermissionsService.shared.markInitialOnboardingCompleted()
             showMainWindow()
         } else {
+            Diagnostics.breadcrumb("setupComplete=false → showPermissionsWindow() (NO docks until granted)")
             showPermissionsWindow(
                 steps: PermissionsService.shared.setupPermissions,
                 marksInitialOnboardingCompleted: true,
@@ -362,6 +369,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             NSApp.setActivationPolicy(.accessory)
             self?.permissionsWindowController = nil
 
+            // Re-read live permission state before building docks. `setupComplete`
+            // is computed from cached status that only `refresh()` updates; without
+            // this, the dock-build guard in syncDockWindowsToScreens() could still
+            // see the stale pre-grant value and skip the docks the user just unlocked.
+            PermissionsService.shared.refresh()
+
             if marksInitialOnboardingCompleted {
                 PermissionsService.shared.markInitialOnboardingCompleted()
             }
@@ -386,7 +399,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// `windowDisplayTarget`. Idempotent — safe to call on launch, on
     /// `didChangeScreenParametersNotification`, and on preference change.
     func syncDockWindowsToScreens() {
+        // Never build dock windows until the required permissions are granted.
+        // On the permissions-wizard launch path a screen-params / prefs
+        // notification can fire and reach here, ordering a dock window as a
+        // sheet of the modal wizard — which aborts in SwiftUI layout
+        // (AttributeGraph precondition / SIGABRT). Docks must only exist on the
+        // setupComplete=true path (showMainWindow / wizard completion). This
+        // enforces the "NO docks until granted" invariant for ALL callers
+        // (both NotificationCenter observers and any future entry point) in one
+        // place — failing gracefully instead of crashing.
+        guard PermissionsService.shared.setupComplete else {
+            Diagnostics.breadcrumb("syncDockWindowsToScreens: SKIPPED — setup incomplete (no docks until permissions granted)")
+            return
+        }
+
         lastSyncedDisplayTarget = DockyPreferences.shared.windowDisplayTarget
+        Diagnostics.breadcrumb("syncDockWindowsToScreens: target=\(DockyPreferences.shared.windowDisplayTarget.rawValue), screens=\(NSScreen.screens.count)")
+        defer { Diagnostics.breadcrumb("  → live docks: perScreen=\(perScreenControllers.count), single=\(mainWindowController != nil)") }
 
         guard DockyPreferences.shared.windowDisplayTarget == .allDisplays else {
             // Single-dock mode: tear down per-screen docks, restore the one dock.
