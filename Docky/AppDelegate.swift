@@ -137,8 +137,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
 
         switch action {
-        case "install-widget":
-            handleInstallWidgetURL(url)
+        // SECURITY (fork hardening): `docky://install-widget?url=<https>` was a
+        // remotely-triggerable drive-by install (any HTTPS host, no checksum,
+        // bundle executed at next launch). Route removed — such URLs now fall
+        // through to `default` and are ignored.
         case "launchpad":
             applyOverlayAction(
                 path: path,
