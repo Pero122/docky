@@ -22,6 +22,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// display ID. Empty in single-dock modes. The existing
     /// `mainWindowController` remains the single-dock instance.
     private var perScreenControllers: [CGDirectDisplayID: MainWindowController] = [:]
+
+    /// Last display target a dock sync ran for. Used to ignore the noisy
+    /// `UserDefaults.didChangeNotification` (fires on every preference write)
+    /// and only rebuild docks when the Display target itself changed.
+    private var lastSyncedDisplayTarget: DockWindowDisplayTarget?
     private var permissionsWindowController: PermissionsWindowController?
     private var settingsWindowController: SettingsWindowController?
     private var debugSnapshotWindowController: NSWindowController?
@@ -72,6 +77,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 marksInitialOnboardingCompleted: true,
                 showsMainWindowOnCompletion: true
             )
+        }
+
+        // Rebuild the dock set live when displays are added/removed/rearranged...
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncDockWindowsToScreens()
+        }
+
+        // ...and when the user flips the Display target in Settings. The
+        // preference writes to UserDefaults, whose change notification is
+        // noisy (every preference write), so only act on a real target change.
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self,
+                  DockyPreferences.shared.windowDisplayTarget != self.lastSyncedDisplayTarget
+            else { return }
+            self.syncDockWindowsToScreens()
         }
     }
 
@@ -358,6 +386,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// `windowDisplayTarget`. Idempotent — safe to call on launch, on
     /// `didChangeScreenParametersNotification`, and on preference change.
     func syncDockWindowsToScreens() {
+        lastSyncedDisplayTarget = DockyPreferences.shared.windowDisplayTarget
+
         guard DockyPreferences.shared.windowDisplayTarget == .allDisplays else {
             // Single-dock mode: tear down per-screen docks, restore the one dock.
             for controller in perScreenControllers.values { controller.close() }
