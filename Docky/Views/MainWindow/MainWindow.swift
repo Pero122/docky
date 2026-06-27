@@ -9,6 +9,16 @@ import AppKit
 import Combine
 import SwiftUI
 
+extension NSScreen {
+    /// Stable hardware identifier for a display. Unlike an `NSScreen`
+    /// object (which is recreated on every display reconfiguration), this
+    /// `CGDirectDisplayID` is stable for the life of the connection, so it
+    /// is safe to key per-screen dock windows by it.
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+}
+
 final class MainWindowContainerView: NSView {
     private let contentView = ClickThroughHostingView(rootView: MainWindowView())
     private var trackingArea: NSTrackingArea?
@@ -173,6 +183,12 @@ final class MainWindow: NSPanel {
     static var allowsKeyWindow: Bool = false
     override var canBecomeKey: Bool { Self.allowsKeyWindow }
     override var canBecomeMain: Bool { false }
+
+    /// When non-nil, this dock instance is pinned to a specific display
+    /// (used by `.allDisplays` mode, where AppDelegate creates one
+    /// MainWindow per screen). When nil, screen selection falls back to
+    /// the `windowDisplayTarget` preference (primary / pointer-following).
+    var assignedScreen: NSScreen?
 
     override var level: NSWindow.Level { get { .mainMenu } set {} }
 
@@ -970,6 +986,9 @@ final class MainWindow: NSPanel {
     }
 
     private func targetScreen() -> NSScreen? {
+        // A pinned instance (.allDisplays mode) always renders on its screen.
+        if let assignedScreen { return assignedScreen }
+
         switch preferences.windowDisplayTarget {
         case .primaryDisplay:
             return NSScreen.screens.first ?? NSScreen.main
