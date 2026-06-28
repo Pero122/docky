@@ -104,7 +104,12 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
         pendingDismissTask = nil
         dismissAnimationTask?.cancel()
         dismissAnimationTask = nil
-        beginDockVisibilityHoldIfNeeded()
+
+        // Resolve the dock the hover originated from ONCE (cheap-cheap, runs
+        // only on preview appearance — not per frame). Everything below pins
+        // to this dock's screen so multi-display previews land correctly.
+        let originatingDock = MainWindow.dockUnderCursor()
+        beginDockVisibilityHoldIfNeeded(for: originatingDock)
 
         // Two-pass sizing: measure the natural content, then re-host the
         // root view inside an explicit centered frame so the content stays
@@ -127,7 +132,8 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
         let finalOrigin = frameOrigin(
             for: windowSize,
             sourceFrame: sourceFrame,
-            preferredEdge: preferredEdge
+            preferredEdge: preferredEdge,
+            dockFrame: originatingDock?.frame
         )
         let initialOrigin = initialOrigin(from: finalOrigin, preferredEdge: preferredEdge)
         let finalFrame = CGRect(origin: finalOrigin, size: windowSize)
@@ -229,11 +235,11 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
     var isShowing: Bool { window?.isVisible == true }
     var presentedSourceTileID: String? { currentTileID }
 
-    private func beginDockVisibilityHoldIfNeeded() {
+    private func beginDockVisibilityHoldIfNeeded(for dock: MainWindow?) {
         guard !isHoldingDockVisible else { return }
-        guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first else { return }
-        mainWindow.beginInteraction()
-        heldMainWindow = mainWindow
+        guard let dock else { return }
+        dock.beginInteraction()
+        heldMainWindow = dock
         isHoldingDockVisible = true
     }
 
@@ -250,14 +256,15 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
     private func frameOrigin(
         for size: CGSize,
         sourceFrame originalSourceFrame: CGRect,
-        preferredEdge: NSRectEdge
+        preferredEdge: NSRectEdge,
+        dockFrame: CGRect?
     ) -> CGPoint {
         // proxy.frame(in: .global) reports SwiftUI top-left coords relative to
         // the dock window's hosting view. Convert to AppKit screen bottom-left
         // before placing this NSWindow — otherwise vertical docks see a Y flip
         // and centered docks see an X offset (bottom docks happened to work by
         // coincidence when the tile sat at the dock window's vertical center).
-        let sourceFrame = convertToScreen(originalSourceFrame)
+        let sourceFrame = convertToScreen(originalSourceFrame, dockFrame: dockFrame)
         let screen = NSScreen.screens.first { $0.visibleFrame.intersects(sourceFrame) } ?? NSScreen.main
         guard let visibleFrame = screen?.visibleFrame else {
             return CGPoint(x: sourceFrame.midX - size.width / 2, y: sourceFrame.maxY)
@@ -297,16 +304,9 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
         }
     }
 
-    private func convertToScreen(_ frame: CGRect) -> CGRect {
-        guard let dockFrame = NSApp.windows.compactMap({ $0 as? MainWindow }).first?.frame else {
-            return frame
-        }
-        return CGRect(
-            x: dockFrame.minX + frame.minX,
-            y: dockFrame.maxY - frame.maxY,
-            width: frame.width,
-            height: frame.height
-        )
+    private func convertToScreen(_ frame: CGRect, dockFrame: CGRect?) -> CGRect {
+        guard let dockFrame else { return frame }
+        return DockHoverGeometry.convertToScreen(frame, dockFrame: dockFrame)
     }
 
     private enum Axis { case x, y }
