@@ -35,6 +35,11 @@ run_case "DockHoverGeometry" \
     "$ROOT/Docky/Services/DockHoverGeometry.swift" \
     "$ROOT/Tests/standalone/DockHoverGeometryTests.swift"
 
+# DockResizeGeometry — drag-to-resize tile-size mapping.
+run_case "DockResizeGeometry" \
+    "$ROOT/Docky/Services/DockResizeGeometry.swift" \
+    "$ROOT/Tests/standalone/DockResizeGeometryTests.swift"
+
 if [ "$fail" -eq 0 ]; then
     echo "All standalone tests passed ✅"
 else

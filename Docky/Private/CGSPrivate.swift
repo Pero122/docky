@@ -94,6 +94,35 @@ func CGSSetWindowAlpha(
     _ alpha: Float
 ) -> Int32
 
+// MARK: - Background Cursor (for non-activating panels)
+//
+// macOS shows the *active* application's cursor, so a `.nonactivatingPanel` that
+// never becomes key/active can't change the displayed cursor with plain
+// `NSCursor` — the window server ignores it (verified: `NSCursor.current` updates
+// but the screen keeps the active app's arrow). Two SkyLight flags fix that, the
+// same way Spotlight / 1Password do:
+//   1. the process-wide `SetsCursorInBackground` connection property, and
+//   2. the per-window `setsCursorInBackground` tag bit (1 << 5) — the piece a
+//      non-activating panel specifically needs; without it the window server
+//      still prefers the active app's cursor.
+// With both set, ordinary `NSCursor` paints over the inactive window. (The
+// cursor-*image* SPIs — CGSSetSystemDefinedCursor / CGSRegisterCursorWithImages /
+// CoreCursorSet — return success but no-op on macOS 26, so this tag-plus-NSCursor
+// path is the one that works.) We use the `CGS`-prefixed aliases because
+// CoreGraphics re-exports them; the `SLS`-prefixed names (yabai/JankyBorders use
+// `SLSSetWindowTags`) would need SkyLight linked directly.
+@_silgen_name("CGSSetConnectionProperty")
+func CGSSetConnectionProperty(
+    _ connection: CGSConnectionID,
+    _ targetConnection: CGSConnectionID,
+    _ key: CFString,
+    _ value: CFTypeRef
+) -> Int32
+
+// Signature + tag_size 64 per yabai / JankyBorders.
+@_silgen_name("CGSSetWindowTags")
+func CGSSetWindowTags(_ cid: CGSConnectionID, _ wid: UInt32, _ tags: UnsafeMutablePointer<UInt64>, _ tagSize: Int32) -> Int32
+
 // MARK: - SkyLight Process Switching (SLPS)
 
 struct ProcessSerialNumber {

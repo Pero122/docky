@@ -50,6 +50,19 @@ final class MainWindowContainerView: NSView {
             topConstraint, bottomConstraint, leadingConstraint, trailingConstraint
         ])
 
+        // Resize-handle overlay sits ABOVE the SwiftUI content so its cursor
+        // rects win and its drags aren't swallowed by the hosting view. It only
+        // claims the thin border/side strips; everything else falls through.
+        let resizeHandle = DockResizeHandleView()
+        resizeHandle.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(resizeHandle)
+        NSLayoutConstraint.activate([
+            resizeHandle.topAnchor.constraint(equalTo: topAnchor),
+            resizeHandle.bottomAnchor.constraint(equalTo: bottomAnchor),
+            resizeHandle.leadingAnchor.constraint(equalTo: leadingAnchor),
+            resizeHandle.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+
         applyContentInsets()
         observePreferencesForInsets()
     }
@@ -340,6 +353,30 @@ final class MainWindow: NSPanel {
     override func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
         super.order(place, relativeTo: otherWin)
         applyBackgroundBlur()
+        enableBackgroundCursorAuthority()
+    }
+
+    private static var didEnableBackgroundCursorProperty = false
+
+    /// macOS shows the *active* application's cursor; a `.nonactivatingPanel`
+    /// can't change the displayed cursor unless WindowServer is told that this
+    /// connection — AND this specific window — may set the cursor while the app
+    /// is inactive. The `SetsCursorInBackground` connection property is
+    /// process-global (set once); the `setsCursorInBackground` window tag
+    /// (`1 << 5`) is per window and is the piece a non-activating panel
+    /// specifically needs. With both, plain `NSCursor` paints over the inactive
+    /// dock — used by the resize-handle overlay (`DockResizeHandleView`). On
+    /// macOS 26 the cursor-*image* SPIs (CoreCursorSet etc.) are no-ops, so this
+    /// tag-plus-NSCursor path is the one that works.
+    private func enableBackgroundCursorAuthority() {
+        let cid = CGSMainConnectionID()
+        if !Self.didEnableBackgroundCursorProperty {
+            Self.didEnableBackgroundCursorProperty = true
+            _ = CGSSetConnectionProperty(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue!)
+        }
+        guard windowNumber > 0 else { return }
+        var tags: UInt64 = 1 << 5 // kCGSSetsCursorInBackgroundTagBit
+        _ = CGSSetWindowTags(cid, UInt32(windowNumber), &tags, 64)
     }
 
     private func applyBackgroundBlur() {
