@@ -1507,13 +1507,16 @@ struct TileContainerView: View {
                   translationMagnitude >= effectiveTileSize * 0.5,
                   isPointInRunningDropRegion(projected(point: value.location)) {
             // Goal 1 "drag anything anywhere": a pinned/trailing icon dropped in the
-            // middle (running) region. Record a section override so it renders in the
-            // middle while keeping its identity (DockSectionArrangement.reconcile
-            // honours it on the next rebuild).
+            // middle (running) region. Save the middle's full order with the icon
+            // inserted AT THE DROP POSITION so it stays where released (it keeps its
+            // identity; DockSectionArrangement.reconcile renders it there).
+            let dropIndex = runningDropIndex(at: value.location, excluding: tile.id)
+            var order = runningTileIDs.filter { $0 != tile.id }
+            order.insert(tile.id, at: max(0, min(dropIndex, order.count)))
             Self.logger.info(
-                "Drag placing tile into running section tile=\(tileLogDescription(tile), privacy: .public)"
+                "Drag placing tile into running section tile=\(tileLogDescription(tile), privacy: .public) index=\(dropIndex, privacy: .public)"
             )
-            store.placeTile(tileID: tile.id, inSection: "running", atIndex: Int.max)
+            store.setSectionOrder(sectionID: "running", tileIDs: order)
         } else if isPinnedReorderable(tileID: tile.id) {
             store.clearSectionOverride(tileID: tile.id)
             if let destinationIndex = draggedTrailingTileDestinationIndex,
@@ -1560,7 +1563,12 @@ struct TileContainerView: View {
                 Self.logger.info(
                     "Drag reordering running tile=\(tileLogDescription(tile), privacy: .public) finalRunningIDs=\(finalRunningTileIDs.joined(separator: ","), privacy: .public)"
                 )
-                if finalRunningTileIDs != runningTileIDs {
+                if store.runningSectionIsManuallyArranged {
+                    // A foreign icon already lives in the middle, so its order is
+                    // governed by the saved arrangement — update that (not the
+                    // separate runningOrder), or reconcile would ignore the reorder.
+                    store.setSectionOrder(sectionID: "running", tileIDs: finalRunningTileIDs)
+                } else if finalRunningTileIDs != runningTileIDs {
                     store.setRunningTileOrder(ids: finalRunningTileIDs)
                 }
             } else if translationMagnitude >= effectiveTileSize * 0.5 {
@@ -1896,6 +1904,20 @@ struct TileContainerView: View {
         let lowerBound = projected(point: runningDividerFrame.origin) + projected(size: runningDividerFrame.size)
         let upperBound = projected(point: trailingDividerFrame.origin)
         return positionValue >= lowerBound && positionValue <= upperBound
+    }
+
+    /// The index at which a tile dropped at `location` should be inserted into the
+    /// running (middle) section, from the cursor position versus the running tiles'
+    /// midpoints — the same rule the in-section reorder preview uses, so a foreign
+    /// icon lands exactly where it's released.
+    private func runningDropIndex(at location: CGPoint, excluding excludedID: String) -> Int {
+        let positionValue = projected(point: location)
+        let tiles = runningTiles.filter { $0.id != excludedID }
+        return tiles.enumerated().first { _, tile in
+            guard let frame = tileFrames[tile.id] else { return false }
+            let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
+            return positionValue < midpoint
+        }?.offset ?? tiles.count
     }
 
     private func isPointInTrailingDropRegion(_ positionValue: CGFloat) -> Bool {

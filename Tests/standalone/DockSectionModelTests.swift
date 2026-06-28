@@ -98,6 +98,18 @@ enum DockSectionModelTests {
         // 13. reconcile: a saved entry under an unknown section id is ignored.
         check(DockSectionArrangement.reconcile(defaults: s, saved: ["nonexistent": ["pinned:A"]]) == s, "reconcile: unknown section id ignored")
 
+        // 14. LIVE scenario: a pinned tile placed into the running section that ALSO
+        // holds native running tiles — the saved order interleaves the foreign tile
+        // between the natives, and it leaves its leading section.
+        let live = [
+            DockSection(id: "leading", tags: [.defaultPin], tileIDs: ["pinned:anki", "pinned:brave", "pinned:chrome"]),
+            DockSection(id: "running", tags: [.absorbsRunningUnpinned], leadingDividerID: "divider:running", tileIDs: ["running:gear", "running:kitty"]),
+            DockSection(id: "trailing", tags: [.trailing], leadingDividerID: "divider:trailing", tileIDs: ["trash"]),
+        ]
+        let liveRec = DockSectionArrangement.reconcile(defaults: live, saved: ["running": ["running:gear", "pinned:anki", "running:kitty"]])
+        check(liveRec.first(where: { $0.id == "running" })?.tileIDs == ["running:gear", "pinned:anki", "running:kitty"], "live: foreign tile interleaves into running at its saved slot")
+        check(liveRec.first(where: { $0.id == "leading" })?.tileIDs == ["pinned:brave", "pinned:chrome"], "live: foreign tile leaves its leading section")
+
         if failures == 0 {
             print("DockSectionModelTests: all passed ✅")
         } else {

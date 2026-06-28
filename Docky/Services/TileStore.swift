@@ -2536,24 +2536,31 @@ final class TileStore: ObservableObject {
         rebuildTiles()
     }
 
-    /// Goal 1 "drag anything anywhere": record that the user has placed `tileID`
-    /// in `sectionID` (e.g. a pinned icon dropped into the middle group). The tile
-    /// keeps its pinned/trailing/running identity — only where it RENDERS changes,
-    /// via `DockSectionArrangement.reconcile` on the next rebuild. The tile is
-    /// removed from any section it was previously placed in, so placement is a
-    /// single authoritative override per tile.
-    func placeTile(tileID: String, inSection sectionID: String, atIndex index: Int) {
+    /// True when the running (middle) section's order is governed by a saved
+    /// arrangement (because the user dragged something into/through it), so a
+    /// subsequent running-app reorder must update that arrangement rather than the
+    /// separate `runningOrder`, or it would be ignored by reconcile.
+    var runningSectionIsManuallyArranged: Bool {
+        preferences.sectionArrangement["running"]?.isEmpty == false
+    }
+
+    /// Goal 1 "drag anything anywhere": persist the FULL ordered membership of
+    /// `sectionID` exactly as the user just arranged it (their dropped icon already
+    /// inserted at the drop position). `tileIDs` may mix a section's native tiles
+    /// with foreign ones dragged in — `DockSectionArrangement.reconcile` renders
+    /// them in this order, drops ids that no longer exist, and appends genuinely
+    /// new tiles (e.g. a freshly-launched app). Any tile now in this section is
+    /// removed from the others, so each tile has a single authoritative placement.
+    func setSectionOrder(sectionID: String, tileIDs: [String]) {
         var arrangement = preferences.sectionArrangement
-        for key in Array(arrangement.keys) {
-            arrangement[key]?.removeAll { $0 == tileID }
+        let moving = Set(tileIDs)
+        for key in Array(arrangement.keys) where key != sectionID {
+            arrangement[key]?.removeAll { moving.contains($0) }
         }
-        var list = arrangement[sectionID] ?? []
-        let clamped = max(0, min(index, list.count))
-        list.insert(tileID, at: clamped)
-        arrangement[sectionID] = list
+        arrangement[sectionID] = tileIDs
         arrangement = arrangement.filter { !$0.value.isEmpty }
         guard arrangement != preferences.sectionArrangement else { return }
-        TileStore.logger.info("placeTile tile=\(tileID, privacy: .public) section=\(sectionID, privacy: .public)")
+        TileStore.logger.info("setSectionOrder section=\(sectionID, privacy: .public) count=\(tileIDs.count)")
         preferences.sectionArrangement = arrangement
         rebuildTiles()
     }
