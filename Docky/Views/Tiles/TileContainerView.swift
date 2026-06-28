@@ -428,9 +428,13 @@ struct TileContainerView: View {
     /// middle group animates during a reorder just like the pinned group.
     private var previewRunningBaseTiles: [Tile] {
         var tiles = runningTiles
+        // Open a gap whenever the drag targets a running slot — including a
+        // cross-group drag of a tile whose home is pinned/trailing — so the
+        // running icons part to make room, not only when reordering within
+        // running. `removeAll` is a no-op when the dragged tile isn't already
+        // a running member, so the foreign tile is simply inserted.
         guard let destinationIndex = draggedRunningTileDestinationIndex,
-              let draggedTile,
-              isDraggingRunningTile else {
+              let draggedTile else {
             return tiles
         }
         tiles.removeAll { $0.id == draggedTile.id }
@@ -1505,7 +1509,10 @@ struct TileContainerView: View {
             isTrailingSource: isTrailingReorderable(tileID: tile.id),
             canDropIntoPinned: canDropInPinnedSection(tile),
             canDropIntoTrailing: canDropInTrailingSection(tile),
-            canDropIntoRunning: isRunningReorderable(tileID: tile.id)
+            // Any reorderable tile can be placed in the running group (blind
+            // cross-section placement), not just tiles whose id is `running:` —
+            // so the running icons part to open a gap during a cross-group drag.
+            canDropIntoRunning: isReorderable(tileID: tile.id)
         )
     }
 
