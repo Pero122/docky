@@ -1488,12 +1488,27 @@ struct TileContainerView: View {
                     store.setTrailingTileOrder(ids: finalTrailingTileIDs)
                 }
             }
-        } else if let destinationIndex = draggedPinnedTileDestinationIndex,
-                  let bundleIdentifier = draggedBundleIdentifier {
-            Self.logger.info(
-                "Drag pinning app tile=\(tileLogDescription(tile), privacy: .public) bundleIdentifier=\(bundleIdentifier, privacy: .public) destinationIndex=\(destinationIndex, privacy: .public)"
-            )
-            _ = store.pinApp(bundleIdentifier: bundleIdentifier, at: destinationIndex)
+        } else if let bundleIdentifier = draggedBundleIdentifier {
+            // Running (unpinned) app: dragging it is a "keep it here" gesture,
+            // like the macOS Dock. Pin it at the drop position so it sticks and
+            // becomes freely reorderable afterwards. When the pointer was over the
+            // pinned region we already have an index; otherwise — the common case,
+            // dropping over the running apps, which sit right of the pinned section
+            // and aren't themselves a drop region — fall back to the slot nearest
+            // the drop point (which lands at the end of the pinned section). Gate
+            // on a deliberate drag so a slightly-jiggled click doesn't pin the app.
+            if translationMagnitude >= effectiveTileSize * 0.5 {
+                let destinationIndex = draggedPinnedTileDestinationIndex
+                    ?? pinDropIndex(at: value.location, excluding: tile.id)
+                Self.logger.info(
+                    "Drag pinning app tile=\(tileLogDescription(tile), privacy: .public) bundleIdentifier=\(bundleIdentifier, privacy: .public) destinationIndex=\(destinationIndex, privacy: .public) registered=\(self.draggedPinnedTileDestinationIndex != nil, privacy: .public)"
+                )
+                _ = store.pinApp(bundleIdentifier: bundleIdentifier, at: destinationIndex)
+            } else {
+                Self.logger.info(
+                    "Drag ended without pinning, movement too small tile=\(tileLogDescription(tile), privacy: .public) magnitude=\(translationMagnitude, privacy: .public)"
+                )
+            }
         } else {
             Self.logger.info(
                 "Drag ended with no mutation tile=\(tileLogDescription(tile), privacy: .public) pinnedDestination=\(optionalIndexDescription(draggedPinnedTileDestinationIndex), privacy: .public) trailingDestination=\(optionalIndexDescription(draggedTrailingTileDestinationIndex), privacy: .public) folderTarget=\(draggedAppFolderTargetTileID ?? "nil", privacy: .public)"
@@ -1545,6 +1560,19 @@ struct TileContainerView: View {
         draggedPinnedTileDestinationIndex = nil
         draggedTrailingTileDestinationIndex = nil
         editMode.paletteDropDestination = nil
+    }
+
+    /// Pinned-section insertion index for an app dropped at `location`, based on
+    /// where the drop falls relative to the existing pinned tiles. A drop to the
+    /// right of all pinned tiles (e.g. over the running apps, which aren't a drop
+    /// region of their own) lands at the end of the pinned section.
+    private func pinDropIndex(at location: CGPoint, excluding tileID: String) -> Int {
+        let dropPosition = projected(point: location)
+        let pinned = previewPinnedBaseTiles.filter { $0.id != tileID }
+        return pinned.enumerated().first { _, tile in
+            guard let frame = tileFrames[tile.id] else { return false }
+            return dropPosition < projected(point: frame.origin) + projected(size: frame.size) / 2
+        }?.offset ?? pinned.count
     }
 
     private func updatePreviewDestination(
