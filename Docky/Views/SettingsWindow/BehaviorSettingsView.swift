@@ -483,8 +483,19 @@ struct BehaviorSettingsView: View {
     private var appFoldersSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
+                Toggle("Allow App Folders", isOn: $preferences.allowsAppFolders)
+                    .font(.headline)
+
+                Text("Group icons into a folder by dropping one onto another. Turn this off to stop accidental grouping — dropping an icon on another then just reorders it — and any folders you already have are split back into individual icons.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+
+            VStack(alignment: .leading, spacing: 8) {
                 Toggle("Shows Grouped Opened Apps In Dock", isOn: $preferences.showsGroupedOpenedAppsInDock)
                     .font(.headline)
+                    .disabled(!preferences.allowsAppFolders)
 
                 Text("Shows running apps from an app folder immediately to the right of that folder, and lets the folder reflect how many grouped apps are open.")
                     .foregroundStyle(.secondary)
@@ -495,7 +506,7 @@ struct BehaviorSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Shows Grouping Backdrop", isOn: $preferences.showsGroupedOpenedAppsBackdrop)
                     .font(.headline)
-                    .disabled(!preferences.showsGroupedOpenedAppsInDock)
+                    .disabled(!preferences.allowsAppFolders || !preferences.showsGroupedOpenedAppsInDock)
 
                 Text("Draws a rounded backdrop around the folder tile and its grouped opened apps. Turn off to keep the grouping without the visual halo.")
                     .foregroundStyle(.secondary)

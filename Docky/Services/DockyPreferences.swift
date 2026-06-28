@@ -2255,6 +2255,17 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// When false, app folders are disabled entirely: dropping one icon onto
+    /// another no longer groups them, and any existing folders are dissolved
+    /// back into individual icons (see `TileStore.dissolveAllAppFolders`).
+    /// Default true preserves stock behaviour.
+    var allowsAppFolders: Bool {
+        didSet {
+            guard allowsAppFolders != oldValue else { return }
+            defaults.set(allowsAppFolders, forKey: Keys.allowsAppFolders)
+        }
+    }
+
     /// Whether the rounded backdrop should be drawn around the folder tile and
     /// its grouped opened apps. Independent of `showsGroupedOpenedAppsInDock`
     /// so users can keep the grouping without the visual halo.
@@ -3527,6 +3538,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let runningOrder = "docky.runningOrder"
         static let sectionArrangement = "docky.sectionArrangement"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
+        static let allowsAppFolders = "docky.allowsAppFolders"
         static let showsGroupedOpenedAppsBackdrop = "docky.showsGroupedOpenedAppsBackdrop"
         static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
         static let enablesStartMenuOverlay = "docky.enablesStartMenuOverlay"
@@ -3634,6 +3646,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let runningOrder: [String] = []
         static let sectionArrangement: [String: [String]] = [:]
         static let showsGroupedOpenedAppsInDock = true
+        static let allowsAppFolders = true
         static let showsGroupedOpenedAppsBackdrop = true
         static let enablesLaunchpadOverlay = true
         static let enablesStartMenuOverlay = true
@@ -3764,6 +3777,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         let storedRunningOrder = defaults.stringArray(forKey: Keys.runningOrder)
         let storedSectionArrangement = defaults.dictionary(forKey: Keys.sectionArrangement) as? [String: [String]]
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
+        let storedAllowsAppFolders = defaults.object(forKey: Keys.allowsAppFolders) as? Bool
         let storedShowsGroupedOpenedAppsBackdrop = defaults.object(forKey: Keys.showsGroupedOpenedAppsBackdrop) as? Bool
         let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
         let storedEnablesStartMenuOverlay = defaults.object(forKey: Keys.enablesStartMenuOverlay) as? Bool
@@ -3895,6 +3909,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         self.runningOrder = storedRunningOrder ?? DefaultValues.runningOrder
         self.sectionArrangement = storedSectionArrangement ?? DefaultValues.sectionArrangement
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
+        self.allowsAppFolders = storedAllowsAppFolders ?? DefaultValues.allowsAppFolders
         self.showsGroupedOpenedAppsBackdrop = storedShowsGroupedOpenedAppsBackdrop ?? DefaultValues.showsGroupedOpenedAppsBackdrop
         self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
         self.enablesStartMenuOverlay = storedEnablesStartMenuOverlay ?? DefaultValues.enablesStartMenuOverlay
@@ -4121,6 +4136,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
 
         // App folders
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
+        allowsAppFolders = DefaultValues.allowsAppFolders
         showsGroupedOpenedAppsBackdrop = DefaultValues.showsGroupedOpenedAppsBackdrop
 
         // Widgets
@@ -4206,6 +4222,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         runningOrder = DefaultValues.runningOrder
         sectionArrangement = DefaultValues.sectionArrangement
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
+        allowsAppFolders = DefaultValues.allowsAppFolders
         showsGroupedOpenedAppsBackdrop = DefaultValues.showsGroupedOpenedAppsBackdrop
         enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
         enablesStartMenuOverlay = DefaultValues.enablesStartMenuOverlay

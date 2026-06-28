@@ -136,6 +136,19 @@ final class TileStore: ObservableObject {
             self?.rebuildTiles()
         }
         .store(in: &cancellables)
+        observeChanges { [weak self] in
+            let allowsAppFolders = DockyPreferences.shared.allowsAppFolders
+            guard let self else { return }
+            // Turning folders off dissolves any that exist (idempotent — no-op
+            // once none remain); turning them back on just repaints. Blocking
+            // NEW folder creation lives in the drag layer's drop-target gate.
+            if allowsAppFolders {
+                self.rebuildTiles()
+            } else {
+                self.dissolveAllAppFolders()
+            }
+        }
+        .store(in: &cancellables)
         mediaPlayback.$statesByBundleIdentifier
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -542,6 +555,26 @@ final class TileStore: ObservableObject {
         pinnedItems.remove(at: itemIndex)
         pinnedItems.insert(contentsOf: replacementItems, at: itemIndex)
         preferences.pinnedItems = pinnedItems
+        refreshPinnedTilesFromPreferences()
+        rebuildTiles()
+    }
+
+    /// Dissolves every app folder back into its individual app tiles in one
+    /// batch — used by the "disable app folders" setting. Idempotent: returns
+    /// early once no folder remains, so it's safe to call on every launch and on
+    /// each preference emission without looping or churn.
+    func dissolveAllAppFolders() {
+        guard preferences.pinnedItems.contains(where: { $0.kind == .appFolder }) else { return }
+        var items: [PinnedTileItem] = []
+        for item in preferences.pinnedItems {
+            if item.kind == .appFolder {
+                expandedInlineAppFolderIDs.remove(item.id)
+                items.append(contentsOf: item.folderBundleIdentifiers.map(PinnedTileItem.app(bundleIdentifier:)))
+            } else {
+                items.append(item)
+            }
+        }
+        preferences.pinnedItems = items
         refreshPinnedTilesFromPreferences()
         rebuildTiles()
     }
