@@ -576,7 +576,7 @@ struct TileContainerView: View {
             remainingTrailingTiles.removeAll { $0.id == draggedTileID }
         }
         let clampedDestinationIndex = min(max(destinationIndex, 0), remainingTrailingTiles.count)
-        if let draggedTile, store.makeTrailingItem(from: draggedTile) != nil {
+        if let draggedTile, (isReorderable(tileID: draggedTile.id) || store.makeTrailingItem(from: draggedTile) != nil) {
             remainingTrailingTiles.insert(draggedTile, at: clampedDestinationIndex)
         } else if let palettePreviewTile, makeTrailingItem(from: editMode.paletteDrag) != nil {
             remainingTrailingTiles.insert(palettePreviewTile, at: clampedDestinationIndex)
@@ -1411,7 +1411,11 @@ struct TileContainerView: View {
     }
 
     private func canDropInTrailingSection(_ tile: Tile) -> Bool {
-        isTrailingReorderable(tileID: tile.id) || store.makeTrailingItem(from: tile) != nil
+        // Any reorderable tile can be placed in the trailing group via the blind
+        // section override (keeping its identity), not only ones that convert to
+        // a native trailing item — so a regular app can land there and the
+        // trailing icons part to make room.
+        isReorderable(tileID: tile.id) || store.makeTrailingItem(from: tile) != nil
     }
 
     private func reorderGesture(for tile: Tile) -> some Gesture {
@@ -1565,6 +1569,24 @@ struct TileContainerView: View {
                 "Drag placing tile into running section tile=\(tileLogDescription(tile), privacy: .public) index=\(dropIndex, privacy: .public)"
             )
             store.setSectionOrder(sectionID: "running", tileIDs: order)
+        } else if isReorderable(tileID: tile.id),
+                  translationMagnitude >= effectiveTileSize * 0.5,
+                  draggedTrashTargetTileID == nil,
+                  isPointInTrailingDropRegion(projected(point: value.location)),
+                  store.makeTrailingItem(from: tile) == nil {
+            // Goal 1 "drag anything anywhere": a tile that can't become a native
+            // trailing item (a regular app) dropped in the trailing region, left
+            // of the trash. Place it there via the blind section override so it
+            // keeps its identity (reconcile renders it in trailing). Dropping ON
+            // the trash is handled earlier (unpin); convertible tiles
+            // (widgets/spacers) still take the legacy makeTrailingItem path below.
+            let dropIndex = trailingDropIndex(at: value.location, excluding: tile.id)
+            var order = trailingTileIDs.filter { $0 != tile.id }
+            order.insert(tile.id, at: max(0, min(dropIndex, order.count)))
+            Self.logger.info(
+                "Drag placing tile into trailing section tile=\(tileLogDescription(tile), privacy: .public) index=\(dropIndex, privacy: .public)"
+            )
+            store.setSectionOrder(sectionID: "trailing", tileIDs: order)
         } else if isPinnedReorderable(tileID: tile.id) {
             store.clearSectionOverride(tileID: tile.id)
             if let destinationIndex = draggedTrailingTileDestinationIndex,
@@ -1961,6 +1983,16 @@ struct TileContainerView: View {
     private func runningDropIndex(at location: CGPoint, excluding excludedID: String) -> Int {
         let positionValue = projected(point: location)
         let tiles = runningTiles.filter { $0.id != excludedID }
+        return tiles.enumerated().first { _, tile in
+            guard let frame = tileFrames[tile.id] else { return false }
+            let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
+            return positionValue < midpoint
+        }?.offset ?? tiles.count
+    }
+
+    private func trailingDropIndex(at location: CGPoint, excluding excludedID: String) -> Int {
+        let positionValue = projected(point: location)
+        let tiles = trailingTiles.filter { $0.id != excludedID }
         return tiles.enumerated().first { _, tile in
             guard let frame = tileFrames[tile.id] else { return false }
             let midpoint = projected(point: frame.origin) + projected(size: frame.size) / 2
