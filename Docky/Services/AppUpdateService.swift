@@ -69,6 +69,18 @@ final class AppUpdateService: ObservableObject {
         )
 
         let updater = updaterController.updater
+
+        // FORK SAFETY — never auto-update. The bundled appcast (`SUFeedURL`) still
+        // points at upstream getdocky.com, so a background update would silently
+        // replace this fork with the official build (wiping the multi-screen /
+        // drag-resize / widget-security changes). Force auto-check + auto-download
+        // off at the source on every launch, so neither Sparkle's first-run prompt
+        // nor a stray `defaults write gt.quintero.Docky SUEnableAutomaticChecks`
+        // can re-arm the background path. The manual "Check for Updates…" menu item
+        // still works for deliberate, user-initiated checks.
+        updater.automaticallyChecksForUpdates = false
+        updater.automaticallyDownloadsUpdates = false
+
         canCheckForUpdates = updater.canCheckForUpdates
         automaticallyChecksForUpdates = updater.automaticallyChecksForUpdates
         automaticallyDownloadsUpdates = updater.automaticallyDownloadsUpdates
