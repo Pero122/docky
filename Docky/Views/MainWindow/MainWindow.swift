@@ -20,7 +20,12 @@ extension NSScreen {
 }
 
 final class MainWindowContainerView: NSView {
-    private let contentView = ClickThroughHostingView(rootView: MainWindowView())
+    /// Per-window magnification state. Each screen's dock owns its own so only
+    /// the hovered screen magnifies — see `DockMagnificationService`.
+    let magnification = DockMagnificationService()
+    private lazy var contentView = ClickThroughHostingView(
+        rootView: MainWindowView(magnification: magnification)
+    )
     private var trackingArea: NSTrackingArea?
     private var topConstraint: NSLayoutConstraint!
     private var bottomConstraint: NSLayoutConstraint!
@@ -135,7 +140,7 @@ final class MainWindowContainerView: NSView {
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         (window as? MainWindow)?.pointerDidExitWindow()
-        DockMagnificationService.shared.clearPointer()
+        magnification.clearPointer()
     }
 
     /// Pushes the live pointer position into the magnification service in
@@ -154,10 +159,10 @@ final class MainWindowContainerView: NSView {
             ? inHosting
             : CGPoint(x: inHosting.x, y: contentView.bounds.height - inHosting.y)
         guard cursorIsAtChromeFringe(topLeft, hostingSize: contentView.bounds.size) else {
-            DockMagnificationService.shared.clearPointer()
+            magnification.clearPointer()
             return
         }
-        DockMagnificationService.shared.updatePointer(at: topLeft)
+        magnification.updatePointer(at: topLeft)
     }
 
     /// Cross-axis bounds check against the resting chrome. We don't gate

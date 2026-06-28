@@ -16,7 +16,11 @@ import QuartzCore
 
 @Observable
 final class DockMagnificationService {
-    static let shared = DockMagnificationService()
+    /// One instance per dock window (per screen in `.allDisplays` mode), owned by
+    /// `MainWindowContainerView`. NOT a shared singleton: a single shared pointer
+    /// made every screen's dock magnify off whichever screen was hovered (and at
+    /// that screen's coordinates), so non-hovered docks magnified at the wrong
+    /// place/scale. Per-window state means only the hovered dock magnifies.
 
     /// Animated factor in [0, 1]. Multiplied into the per-icon falloff so the
     /// effect ramps in/out without a jarring snap when the cursor crosses
@@ -37,7 +41,7 @@ final class DockMagnificationService {
     @ObservationIgnored private var rampStart: CFTimeInterval = 0
     @ObservationIgnored private var rampTimer: Timer?
 
-    private init() {}
+    init() {}
 
     /// Pointer has entered the dock hit region and we now have a live axis
     /// coordinate to track. Called from `.onContinuousHover` with
