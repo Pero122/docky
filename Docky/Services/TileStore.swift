@@ -2178,17 +2178,35 @@ final class TileStore: ObservableObject {
             ? pinnedWithoutFinder
             : pinnedWithoutFinder + runningTiles
 
+        // Goal 1 phase 2: the structural group ordering now flows through the
+        // modular section engine (DockSectionModel) instead of hand-concatenation.
+        // Finder+pinned form the leading group; the running and trailing groups
+        // each lead with their divider, emitted only when the group is non-empty
+        // (so an empty group never leaves an orphan divider — the one intentional
+        // cleanup vs the old unconditional `divider:trailing`). The per-group tile
+        // lists (widgets, minimized windows, trash hiding) are built exactly as
+        // before, so the rendered order is identical for every non-degenerate dock.
         let leadingFinder: [Tile] = hidesFinder ? [] : [Self.finderTile()]
-        var result: [Tile] = tilesWithWidgets(appendedTo: leadingFinder)
-        result.append(contentsOf: tilesWithWidgets(appendedTo: mergedPinnedTiles))
-        if preferences.effectiveShowsActivePinnedSeparator, !runningTiles.isEmpty {
-            result.append(Tile(id: "divider:running", content: .divider))
-            result.append(contentsOf: tilesWithWidgets(appendedTo: runningTiles))
-        }
-        result.append(Tile(id: "divider:trailing", content: .divider))
-        let trailing = trailingTiles(withInsertedMinimizedWindows: minimizedWindowTiles)
-        result.append(contentsOf: hidesTrash ? trailing.filter { !Self.isTrash($0) } : trailing)
-        tiles = result.map(applyingAppWidgetDisplay(to:))
+        let leadingGroup = tilesWithWidgets(appendedTo: leadingFinder)
+            + tilesWithWidgets(appendedTo: mergedPinnedTiles)
+        let showsRunningGroup = preferences.effectiveShowsActivePinnedSeparator && !runningTiles.isEmpty
+        let runningGroup = showsRunningGroup ? tilesWithWidgets(appendedTo: runningTiles) : []
+        let trailingRaw = trailingTiles(withInsertedMinimizedWindows: minimizedWindowTiles)
+        let trailingGroup = hidesTrash ? trailingRaw.filter { !Self.isTrash($0) } : trailingRaw
+
+        let runningDivider = Tile(id: "divider:running", content: .divider)
+        let trailingDivider = Tile(id: "divider:trailing", content: .divider)
+        let sections = [
+            DockSection(id: "leading", tags: [.defaultPin], tileIDs: leadingGroup.map(\.id)),
+            DockSection(id: "running", tags: [.absorbsRunningUnpinned], leadingDividerID: runningDivider.id, tileIDs: runningGroup.map(\.id)),
+            DockSection(id: "trailing", tags: [.trailing], leadingDividerID: trailingDivider.id, tileIDs: trailingGroup.map(\.id)),
+        ]
+        var tilesByID: [String: Tile] = [:]
+        for tile in leadingGroup + runningGroup + trailingGroup { tilesByID[tile.id] = tile }
+        tilesByID[runningDivider.id] = runningDivider
+        tilesByID[trailingDivider.id] = trailingDivider
+        let ordered = DockSectionArrangement.assemble(sections).compactMap { tilesByID[$0] }
+        tiles = ordered.map(applyingAppWidgetDisplay(to:))
     }
 
     /// Inserts every `layout.insertions` entry the active theme defines
