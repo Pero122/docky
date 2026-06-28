@@ -21,6 +21,15 @@ final class TileStore: ObservableObject {
 
     @Published private(set) var tiles: [Tile] = []
 
+    /// Maps every reorderable tile id to the section it currently lives in
+    /// ("leading" / "running" / "trailing"), as decided by the engine AFTER the
+    /// cross-section arrangement is applied. This is the blind/positional truth:
+    /// a tile's render group is wherever it was placed, NOT what its id prefix
+    /// implies. The view buckets by this instead of by id so a `pinned:*` tile
+    /// dragged into the running group actually renders there. Dividers and
+    /// non-reorderable tiles (Finder, folder children) are absent.
+    @Published private(set) var sectionByTileID: [String: String] = [:]
+
     private static let changeNotification = Notification.Name("com.apple.dock.prefchanged")
     private static let hasImportedSystemDockPreferencesKey = "docky.tileStore.hasImportedSystemDockPreferences"
     private static let expandedInlineAppFolderIDsKey = "docky.tileStore.expandedInlineAppFolderIDs"
@@ -2178,17 +2187,53 @@ final class TileStore: ObservableObject {
             ? pinnedWithoutFinder
             : pinnedWithoutFinder + runningTiles
 
+        // Goal 1 phase 2: the structural group ordering now flows through the
+        // modular section engine (DockSectionModel) instead of hand-concatenation.
+        // Finder+pinned form the leading group; the running and trailing groups
+        // each lead with their divider, emitted only when the group is non-empty
+        // (so an empty group never leaves an orphan divider — the one intentional
+        // cleanup vs the old unconditional `divider:trailing`). The per-group tile
+        // lists (widgets, minimized windows, trash hiding) are built exactly as
+        // before, so the rendered order is identical for every non-degenerate dock.
         let leadingFinder: [Tile] = hidesFinder ? [] : [Self.finderTile()]
-        var result: [Tile] = tilesWithWidgets(appendedTo: leadingFinder)
-        result.append(contentsOf: tilesWithWidgets(appendedTo: mergedPinnedTiles))
-        if preferences.effectiveShowsActivePinnedSeparator, !runningTiles.isEmpty {
-            result.append(Tile(id: "divider:running", content: .divider))
-            result.append(contentsOf: tilesWithWidgets(appendedTo: runningTiles))
+        let leadingGroup = tilesWithWidgets(appendedTo: leadingFinder)
+            + tilesWithWidgets(appendedTo: mergedPinnedTiles)
+        let showsRunningGroup = preferences.effectiveShowsActivePinnedSeparator && !runningTiles.isEmpty
+        let runningGroup = showsRunningGroup ? tilesWithWidgets(appendedTo: runningTiles) : []
+        let trailingRaw = trailingTiles(withInsertedMinimizedWindows: minimizedWindowTiles)
+        let trailingGroup = hidesTrash ? trailingRaw.filter { !Self.isTrash($0) } : trailingRaw
+
+        let runningDivider = Tile(id: "divider:running", content: .divider)
+        let trailingDivider = Tile(id: "divider:trailing", content: .divider)
+        let sections = [
+            DockSection(id: "leading", tags: [.defaultPin], tileIDs: leadingGroup.map(\.id)),
+            DockSection(id: "running", tags: [.absorbsRunningUnpinned], leadingDividerID: runningDivider.id, tileIDs: runningGroup.map(\.id)),
+            DockSection(id: "trailing", tags: [.trailing], leadingDividerID: trailingDivider.id, tileIDs: trailingGroup.map(\.id)),
+        ]
+        var tilesByID: [String: Tile] = [:]
+        for tile in leadingGroup + runningGroup + trailingGroup { tilesByID[tile.id] = tile }
+        tilesByID[runningDivider.id] = runningDivider
+        tilesByID[trailingDivider.id] = trailingDivider
+        // Goal 1 phase 2b: apply the user's saved cross-section arrangement
+        // (empty = unchanged) so tiles dragged across a divider render where they
+        // were dropped, then flatten through the engine.
+        let arranged = DockSectionArrangement.reconcile(defaults: sections, saved: preferences.sectionArrangement)
+        let ordered = DockSectionArrangement.assemble(arranged).compactMap { tilesByID[$0] }
+
+        // Record each tile's resolved section so the view can bucket by position
+        // (blind groups) rather than by id prefix. Set BEFORE `tiles` so the map
+        // is already current when the view reacts to the new tile list. The
+        // dividers carry no payload here; only the reorderable tiles each
+        // section actually holds.
+        var sectionMap: [String: String] = [:]
+        for section in arranged {
+            for tileID in section.tileIDs {
+                sectionMap[tileID] = section.id
+            }
         }
-        result.append(Tile(id: "divider:trailing", content: .divider))
-        let trailing = trailingTiles(withInsertedMinimizedWindows: minimizedWindowTiles)
-        result.append(contentsOf: hidesTrash ? trailing.filter { !Self.isTrash($0) } : trailing)
-        tiles = result.map(applyingAppWidgetDisplay(to:))
+        sectionByTileID = sectionMap
+
+        tiles = ordered.map(applyingAppWidgetDisplay(to:))
     }
 
     /// Inserts every `layout.insertions` entry the active theme defines
@@ -2511,6 +2556,53 @@ final class TileStore: ObservableObject {
         guard updated != preferences.runningOrder else { return }
         TileStore.logger.info("setRunningTileOrder applying reorder count=\(newRunningOrder.count)")
         preferences.runningOrder = updated
+        rebuildTiles()
+    }
+
+    /// True when the running (middle) section's order is governed by a saved
+    /// arrangement (because the user dragged something into/through it), so a
+    /// subsequent running-app reorder must update that arrangement rather than the
+    /// separate `runningOrder`, or it would be ignored by reconcile.
+    var runningSectionIsManuallyArranged: Bool {
+        preferences.sectionArrangement["running"]?.isEmpty == false
+    }
+
+    /// Goal 1 "drag anything anywhere": persist the FULL ordered membership of
+    /// `sectionID` exactly as the user just arranged it (their dropped icon already
+    /// inserted at the drop position). `tileIDs` may mix a section's native tiles
+    /// with foreign ones dragged in — `DockSectionArrangement.reconcile` renders
+    /// them in this order, drops ids that no longer exist, and appends genuinely
+    /// new tiles (e.g. a freshly-launched app). Any tile now in this section is
+    /// removed from the others, so each tile has a single authoritative placement.
+    func setSectionOrder(sectionID: String, tileIDs: [String]) {
+        var arrangement = preferences.sectionArrangement
+        let moving = Set(tileIDs)
+        for key in Array(arrangement.keys) where key != sectionID {
+            arrangement[key]?.removeAll { moving.contains($0) }
+        }
+        arrangement[sectionID] = tileIDs
+        arrangement = arrangement.filter { !$0.value.isEmpty }
+        guard arrangement != preferences.sectionArrangement else { return }
+        TileStore.logger.info("setSectionOrder section=\(sectionID, privacy: .public) count=\(tileIDs.count)")
+        preferences.sectionArrangement = arrangement
+        rebuildTiles()
+    }
+
+    /// Removes any section-placement override for `tileID`, returning it to its
+    /// default-by-tag section. A no-op (no rebuild) when the tile isn't overridden,
+    /// so it's cheap to call after every normal in-section drop to keep the
+    /// override the single source of "this tile lives in a non-default section".
+    func clearSectionOverride(tileID: String) {
+        var arrangement = preferences.sectionArrangement
+        var changed = false
+        for key in Array(arrangement.keys) where arrangement[key]?.contains(tileID) == true {
+            arrangement[key]?.removeAll { $0 == tileID }
+            changed = true
+        }
+        guard changed else { return }
+        arrangement = arrangement.filter { !$0.value.isEmpty }
+        TileStore.logger.info("clearSectionOverride tile=\(tileID, privacy: .public)")
+        preferences.sectionArrangement = arrangement
         rebuildTiles()
     }
 
