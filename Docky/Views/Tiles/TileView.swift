@@ -49,6 +49,7 @@ struct TileView: View {
     @ObservedObject private var windowPreview = WindowPreviewWindowController.shared
     @ObservedObject private var tilePress = TilePressService.shared
     @ObservedObject private var dockBadges = DockBadgeService.shared
+    @ObservedObject private var windowRegistry = WindowRegistry.shared
 
     private static let finderBundleIdentifier = "com.apple.finder"
     private static let folderPopoverRetapGuardInterval: TimeInterval = 0.25
@@ -760,7 +761,9 @@ struct TileView: View {
             switch preferences.effectiveActiveIndicatorShape {
             case .none:
                 EmptyView()
-            case .dot, .pill, .underline:
+            case .dot:
+                runningDotsIndicator
+            case .pill, .underline:
                 runningIndicatorShape
                     .frame(width: runningIndicatorSize.width, height: runningIndicatorSize.height)
                     .foregroundStyle(Color(nsColor: preferences.effectiveActiveIndicatorColor).opacity(0.9))
@@ -816,6 +819,59 @@ struct TileView: View {
             // Sharp-cornered rectangle that spans the icon edge ,
             // Windows 10-style accent line under running apps.
             Rectangle()
+        }
+    }
+
+    /// Most dots drawn before collapsing to a count number: 1-3 windows show
+    /// dots, 4+ show the number instead (the row would get hard to count).
+    private static let maxRunningDots = 3
+
+    /// Open-window count for this app tile (0 when not an app / not running).
+    private var runningWindowCount: Int {
+        guard case .app(let app) = tile.content,
+              workspace.isRunning(bundleIdentifier: app.bundleIdentifier) else {
+            return 0
+        }
+        // Running but with no AX-enumerable windows still shows a single dot.
+        return max(windowRegistry.windows(forBundleIdentifier: app.bundleIdentifier).count, 1)
+    }
+
+    /// Running indicator for the `.dot` shape: one dot per open window, up to
+    /// `maxRunningDots` (so the row never outgrows the icon). Beyond that the dots
+    /// would be hard to count, so they're replaced by a small SF-rounded count
+    /// number instead. A single window renders exactly the original single dot.
+    @ViewBuilder
+    private var runningDotsIndicator: some View {
+        let count = runningWindowCount
+        let color = Color(nsColor: preferences.effectiveActiveIndicatorColor).opacity(0.9)
+        let dotSize = runningIndicatorThickness
+
+        if count > Self.maxRunningDots {
+            // Too many windows to read as dots — show just the count instead.
+            Text("\(count)")
+                .font(.system(size: max(9, dotSize * 2.4), weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .fixedSize()
+                .shadow(color: .black.opacity(0.35), radius: 0.5, y: 0.5)
+        } else {
+            let spacing = max(2, dotSize * 0.6)
+            Group {
+                if position.isVertical {
+                    VStack(spacing: spacing) {
+                        ForEach(Array(0..<max(1, count)), id: \.self) { _ in
+                            Circle().frame(width: dotSize, height: dotSize)
+                        }
+                    }
+                } else {
+                    HStack(spacing: spacing) {
+                        ForEach(Array(0..<max(1, count)), id: \.self) { _ in
+                            Circle().frame(width: dotSize, height: dotSize)
+                        }
+                    }
+                }
+            }
+            .foregroundStyle(color)
         }
     }
 
