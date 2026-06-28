@@ -21,6 +21,15 @@ final class TileStore: ObservableObject {
 
     @Published private(set) var tiles: [Tile] = []
 
+    /// Maps every reorderable tile id to the section it currently lives in
+    /// ("leading" / "running" / "trailing"), as decided by the engine AFTER the
+    /// cross-section arrangement is applied. This is the blind/positional truth:
+    /// a tile's render group is wherever it was placed, NOT what its id prefix
+    /// implies. The view buckets by this instead of by id so a `pinned:*` tile
+    /// dragged into the running group actually renders there. Dividers and
+    /// non-reorderable tiles (Finder, folder children) are absent.
+    @Published private(set) var sectionByTileID: [String: String] = [:]
+
     private static let changeNotification = Notification.Name("com.apple.dock.prefchanged")
     private static let hasImportedSystemDockPreferencesKey = "docky.tileStore.hasImportedSystemDockPreferences"
     private static let expandedInlineAppFolderIDsKey = "docky.tileStore.expandedInlineAppFolderIDs"
@@ -2210,6 +2219,20 @@ final class TileStore: ObservableObject {
         // were dropped, then flatten through the engine.
         let arranged = DockSectionArrangement.reconcile(defaults: sections, saved: preferences.sectionArrangement)
         let ordered = DockSectionArrangement.assemble(arranged).compactMap { tilesByID[$0] }
+
+        // Record each tile's resolved section so the view can bucket by position
+        // (blind groups) rather than by id prefix. Set BEFORE `tiles` so the map
+        // is already current when the view reacts to the new tile list. The
+        // dividers carry no payload here; only the reorderable tiles each
+        // section actually holds.
+        var sectionMap: [String: String] = [:]
+        for section in arranged {
+            for tileID in section.tileIDs {
+                sectionMap[tileID] = section.id
+            }
+        }
+        sectionByTileID = sectionMap
+
         tiles = ordered.map(applyingAppWidgetDisplay(to:))
     }
 

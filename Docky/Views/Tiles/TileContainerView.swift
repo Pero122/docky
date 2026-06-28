@@ -365,7 +365,7 @@ struct TileContainerView: View {
     }
 
     private var pinnedTiles: [Tile] {
-        store.tiles.filter { isPinnedReorderable(tileID: $0.id) }
+        tilesInSection("leading")
     }
 
     private var pinnedTileIDs: [String] {
@@ -387,7 +387,7 @@ struct TileContainerView: View {
     }
 
     private var trailingTiles: [Tile] {
-        store.tiles.filter { isTrailingReorderable(tileID: $0.id) }
+        tilesInSection("trailing")
     }
 
     private var trailingTileIDs: [String] {
@@ -395,7 +395,29 @@ struct TileContainerView: View {
     }
 
     private var runningTiles: [Tile] {
-        store.tiles.filter { isRunningReorderable(tileID: $0.id) }
+        tilesInSection("running")
+    }
+
+    /// Reorderable tiles the engine placed in `sectionID`, in render order.
+    /// Buckets by the store's resolved section membership (blind/positional)
+    /// instead of by id prefix, so a tile dragged across a divider renders in
+    /// the group it was dropped into rather than snapping back to the group its
+    /// id implies. Non-reorderable tiles (Finder, widgets, folder children,
+    /// dividers) carry no section entry and are excluded.
+    private func tilesInSection(_ sectionID: String) -> [Tile] {
+        store.tiles.filter {
+            store.sectionByTileID[$0.id] == sectionID && isReorderable(tileID: $0.id)
+        }
+    }
+
+    /// True for any tile that can be drag-reordered, regardless of which group
+    /// it currently lives in — the id-prefix predicates are position-agnostic,
+    /// so their union answers "is this a movable item" without re-coupling a
+    /// tile to a fixed group.
+    private func isReorderable(tileID: String) -> Bool {
+        isPinnedReorderable(tileID: tileID)
+            || isRunningReorderable(tileID: tileID)
+            || isTrailingReorderable(tileID: tileID)
     }
 
     private var runningTileIDs: [String] {
@@ -408,7 +430,7 @@ struct TileContainerView: View {
         var tiles = runningTiles
         guard let destinationIndex = draggedRunningTileDestinationIndex,
               let draggedTile,
-              isRunningReorderable(tileID: draggedTile.id) else {
+              isDraggingRunningTile else {
             return tiles
         }
         tiles.removeAll { $0.id == draggedTile.id }
@@ -1333,17 +1355,32 @@ struct TileContainerView: View {
         return supportedSpans.last ?? .one
     }
 
+    /// The section the dragged tile currently lives in, by the engine's
+    /// blind/positional assignment. A tile dragged across a divider belongs to
+    /// the group it was dropped into, regardless of its id prefix.
+    private var draggedTileSection: String? {
+        guard let draggedTileID else { return nil }
+        return store.sectionByTileID[draggedTileID]
+    }
+
     private var isDraggingPinnedTile: Bool {
-        guard let draggedTileID else {
-            return false
-        }
+        guard let draggedTileID else { return false }
+        // Behave by current group, not by id. Fall back to the id predicate only
+        // for a tile not yet tracked in a section (e.g. a still-unpinned running
+        // app being dragged left to pin it).
+        if let section = draggedTileSection { return section == "leading" }
         return isPinnedReorderable(tileID: draggedTileID)
     }
 
+    private var isDraggingRunningTile: Bool {
+        guard let draggedTileID else { return false }
+        if let section = draggedTileSection { return section == "running" }
+        return isRunningReorderable(tileID: draggedTileID)
+    }
+
     private var isDraggingTrailingTile: Bool {
-        guard let draggedTileID else {
-            return false
-        }
+        guard let draggedTileID else { return false }
+        if let section = draggedTileSection { return section == "trailing" }
         return isTrailingReorderable(tileID: draggedTileID)
     }
 
@@ -1395,9 +1432,13 @@ struct TileContainerView: View {
             draggedTileID = tile.id
             draggedAdditionalTileIDs = []
             draggedTileInitialFrame = tileFrames[tile.id]
-            draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
-            draggedRunningTileDestinationIndex = isRunningReorderable(tileID: tile.id) ? runningTileIDs.firstIndex(of: tile.id) : nil
-            draggedTrailingTileDestinationIndex = isTrailingReorderable(tileID: tile.id) ? trailingTileIDs.firstIndex(of: tile.id) : nil
+            // Seed the start index from the tile's CURRENT group (positional),
+            // not its id prefix — a cross-placed tile (e.g. a pinned app sitting
+            // in the running group) must seed its running index, else the drag
+            // starts with no anchor in either section and stutters.
+            draggedPinnedTileDestinationIndex = isDraggingPinnedTile ? pinnedTileIDs.firstIndex(of: tile.id) : nil
+            draggedRunningTileDestinationIndex = isDraggingRunningTile ? runningTileIDs.firstIndex(of: tile.id) : nil
+            draggedTrailingTileDestinationIndex = isDraggingTrailingTile ? trailingTileIDs.firstIndex(of: tile.id) : nil
             // Drag wins over hover/widget previews — they'd block the cursor
             // and confuse the reorder animation otherwise.
             WindowPreviewWindowController.shared.dismissCurrent()
