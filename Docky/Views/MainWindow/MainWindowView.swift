@@ -16,8 +16,13 @@ struct MainWindowView: View {
     private let dockSettings = DockSettingsService.shared
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var layoutService = DockLayoutService.shared
-    private let magnification = DockMagnificationService.shared
+    /// Injected per-window (per screen) so only the hovered dock magnifies.
+    private let magnification: DockMagnificationService
     @ObservedObject private var chromeMetrics = DockChromeMetricsService.shared
+
+    init(magnification: DockMagnificationService) {
+        self.magnification = magnification
+    }
 
     var body: some View {
         #if DEBUG
@@ -42,7 +47,7 @@ struct MainWindowView: View {
                     value: chromeFrameSize
                 )
 
-            TileContainerView()
+            TileContainerView(magnification: magnification)
         }
         .compositingGroup()
     }

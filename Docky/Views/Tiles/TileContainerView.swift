@@ -18,7 +18,12 @@ struct TileContainerView: View {
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var editMode = DockEditModeService.shared
     @ObservedObject private var dockDrag = DockDragService.shared
-    private let magnification = DockMagnificationService.shared
+    /// Injected per-window (per screen) so only the hovered dock magnifies.
+    private let magnification: DockMagnificationService
+
+    init(magnification: DockMagnificationService) {
+        self.magnification = magnification
+    }
 
     @State private var draggedTileID: String?
     @State private var draggedTileOffset: CGFloat = 0
