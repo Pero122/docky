@@ -50,6 +50,11 @@ run_case "RunningTileOrder" \
     "$ROOT/Docky/Services/RunningTileOrder.swift" \
     "$ROOT/Tests/standalone/RunningTileOrderTests.swift"
 
+# DockSectionModel — modular tag-based dock groups (placement + free move + assemble).
+run_case "DockSectionModel" \
+    "$ROOT/Docky/Services/DockSectionModel.swift" \
+    "$ROOT/Tests/standalone/DockSectionModelTests.swift"
+
 if [ "$fail" -eq 0 ]; then
     echo "All standalone tests passed ✅"
 else
