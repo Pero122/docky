@@ -82,15 +82,32 @@ final class WindowReservationService {
         windowCooldowns.removeAll()
     }
 
-    private func scan(windows: [AppWindow]) {
-        guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first,
-              let dockyScreen = mainWindow.screen,
-              let dockyFrame = mainWindow.currentReservationFrame,
-              let primaryScreenHeight = NSScreen.screens.first?.frame.height
-        else { return }
+    /// One dock per screen in `.allDisplays` mode — each carries its own
+    /// reservation strip on its own display.
+    private struct DockReservation {
+        let screen: NSScreen
+        let dockFrame: CGRect
+        let visibleFrame: CGRect
+        let side: DockSide
+    }
 
-        let visibleFrame = dockyScreen.visibleFrame
-        guard let dockySide = side(of: dockyFrame, on: visibleFrame) else { return }
+    private func scan(windows: [AppWindow]) {
+        guard let primaryScreenHeight = NSScreen.screens.first?.frame.height else { return }
+
+        // Collect the reservation strip for EVERY dock, keyed by screen. The
+        // previous code only looked at the first MainWindow, so windows on a
+        // secondary display never matched its screen and were never pushed
+        // off that screen's dock — reservation silently worked on the primary
+        // display only.
+        var docks: [DockReservation] = []
+        for mainWindow in NSApp.windows.compactMap({ $0 as? MainWindow }) {
+            guard let screen = mainWindow.screen,
+                  let dockFrame = mainWindow.currentReservationFrame else { continue }
+            let visibleFrame = screen.visibleFrame
+            guard let side = side(of: dockFrame, on: visibleFrame) else { continue }
+            docks.append(DockReservation(screen: screen, dockFrame: dockFrame, visibleFrame: visibleFrame, side: side))
+        }
+        guard !docks.isEmpty else { return }
 
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let now = Date()
@@ -101,21 +118,23 @@ final class WindowReservationService {
             guard let axFrame = window.frame else { continue }
             // WindowRegistry returns AX-space frames (flipped Y, origin at the
             // top-left of the primary display). Convert to NSScreen space
-            // before any geometry comparison.
+            // before any geometry comparison. `primaryHeight` is correct for
+            // every display since AX and NSScreen share the primary origin.
             let nsFrame = flipY(axFrame, primaryHeight: primaryScreenHeight)
 
-            // Only act on windows on the same screen as Docky.
-            guard let windowScreen = screenContaining(nsFrame), windowScreen == dockyScreen else { continue }
+            // Reserve against the dock on the window's OWN screen.
+            guard let windowScreen = screenContaining(nsFrame),
+                  let dock = docks.first(where: { $0.screen == windowScreen }) else { continue }
 
             // Tile/maximize signature: window intersects Docky AND is anchored
             // to ≥2 edges of the visible frame. This catches full maximize (4
             // flush edges), half tiles (3), and quarter tiles (2) without
             // resizing free-floating windows that happen to overlap Docky.
-            guard nsFrame.intersects(dockyFrame) else { continue }
-            guard flushEdgeCount(of: nsFrame, against: visibleFrame) >= 2 else { continue }
+            guard nsFrame.intersects(dock.dockFrame) else { continue }
+            guard flushEdgeCount(of: nsFrame, against: dock.visibleFrame) >= 2 else { continue }
 
             // Push the window off Docky's strip.
-            let nsTarget = pushAway(nsFrame, from: dockyFrame, on: dockySide)
+            let nsTarget = pushAway(nsFrame, from: dock.dockFrame, on: dock.side)
             // Don't issue redundant resizes.
             guard !rectsMatch(nsFrame, nsTarget) else { continue }
             // Don't shrink a window that has nothing left in the relevant axis.
