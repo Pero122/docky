@@ -431,11 +431,29 @@ final class MainWindow: NSPanel {
         }
         .store(in: &cancellables)
 
+        // Apply tile-driven resizes SYNCHRONOUSLY (no `.receive(on:)` hop) so the
+        // window frame + analytic chrome size land in the SAME runloop turn the
+        // SwiftUI icons invalidate on — otherwise the icons (driven off
+        // `displayTiles`) animate one frame before the border (driven off the
+        // async-pushed `chromeSize`), which reads as the border lagging the icons.
+        // `@Published` fires in `willSet`, so the stored `tileStore.tiles` is still
+        // the OLD value here; forward the delivered `newTiles` instead. The
+        // `isMainThread` guard keeps the AppKit framing call main-thread-safe if a
+        // rebuild ever publishes off-main.
         tileStore.$tiles
             .removeDuplicates()
             .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyCurrentFrame(animated: true, duration: self?.tileMutationAnimationDuration) }
+            .sink { [weak self] newTiles in
+                guard let self else { return }
+                let apply = {
+                    self.applyCurrentFrame(
+                        animated: true,
+                        duration: self.tileMutationAnimationDuration,
+                        tilesOverride: newTiles
+                    )
+                }
+                if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
+            }
             .store(in: &cancellables)
 
         editMode.$isActive
@@ -723,7 +741,7 @@ final class MainWindow: NSPanel {
         applyCurrentFrame(animated: animated, duration: nil)
     }
 
-    private func applyCurrentFrame(animated: Bool, duration: TimeInterval?) {
+    private func applyCurrentFrame(animated: Bool, duration: TimeInterval?, tilesOverride: [Tile]? = nil) {
         let resolvedScreen = targetScreen() ?? screen ?? NSScreen.main
         let screenBounds = resolvedScreen?.frame ?? .zero
         lastPointerScreenFrame = screenBounds
@@ -766,7 +784,7 @@ final class MainWindow: NSPanel {
             return tile
         }()
         let sizingTiles = TileContainerView.previewedTiles(
-            from: tileStore.tiles,
+            from: tilesOverride ?? tileStore.tiles,
             paletteDrag: editMode.paletteDrag,
             paletteDropDestination: editMode.paletteDropDestination,
             externalAppDropPreview: externalAppDropPreview,
