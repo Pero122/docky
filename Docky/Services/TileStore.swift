@@ -2205,7 +2205,11 @@ final class TileStore: ObservableObject {
         for tile in leadingGroup + runningGroup + trailingGroup { tilesByID[tile.id] = tile }
         tilesByID[runningDivider.id] = runningDivider
         tilesByID[trailingDivider.id] = trailingDivider
-        let ordered = DockSectionArrangement.assemble(sections).compactMap { tilesByID[$0] }
+        // Goal 1 phase 2b: apply the user's saved cross-section arrangement
+        // (empty = unchanged) so tiles dragged across a divider render where they
+        // were dropped, then flatten through the engine.
+        let arranged = DockSectionArrangement.reconcile(defaults: sections, saved: preferences.sectionArrangement)
+        let ordered = DockSectionArrangement.assemble(arranged).compactMap { tilesByID[$0] }
         tiles = ordered.map(applyingAppWidgetDisplay(to:))
     }
 
@@ -2529,6 +2533,46 @@ final class TileStore: ObservableObject {
         guard updated != preferences.runningOrder else { return }
         TileStore.logger.info("setRunningTileOrder applying reorder count=\(newRunningOrder.count)")
         preferences.runningOrder = updated
+        rebuildTiles()
+    }
+
+    /// Goal 1 "drag anything anywhere": record that the user has placed `tileID`
+    /// in `sectionID` (e.g. a pinned icon dropped into the middle group). The tile
+    /// keeps its pinned/trailing/running identity — only where it RENDERS changes,
+    /// via `DockSectionArrangement.reconcile` on the next rebuild. The tile is
+    /// removed from any section it was previously placed in, so placement is a
+    /// single authoritative override per tile.
+    func placeTile(tileID: String, inSection sectionID: String, atIndex index: Int) {
+        var arrangement = preferences.sectionArrangement
+        for key in Array(arrangement.keys) {
+            arrangement[key]?.removeAll { $0 == tileID }
+        }
+        var list = arrangement[sectionID] ?? []
+        let clamped = max(0, min(index, list.count))
+        list.insert(tileID, at: clamped)
+        arrangement[sectionID] = list
+        arrangement = arrangement.filter { !$0.value.isEmpty }
+        guard arrangement != preferences.sectionArrangement else { return }
+        TileStore.logger.info("placeTile tile=\(tileID, privacy: .public) section=\(sectionID, privacy: .public)")
+        preferences.sectionArrangement = arrangement
+        rebuildTiles()
+    }
+
+    /// Removes any section-placement override for `tileID`, returning it to its
+    /// default-by-tag section. A no-op (no rebuild) when the tile isn't overridden,
+    /// so it's cheap to call after every normal in-section drop to keep the
+    /// override the single source of "this tile lives in a non-default section".
+    func clearSectionOverride(tileID: String) {
+        var arrangement = preferences.sectionArrangement
+        var changed = false
+        for key in Array(arrangement.keys) where arrangement[key]?.contains(tileID) == true {
+            arrangement[key]?.removeAll { $0 == tileID }
+            changed = true
+        }
+        guard changed else { return }
+        arrangement = arrangement.filter { !$0.value.isEmpty }
+        TileStore.logger.info("clearSectionOverride tile=\(tileID, privacy: .public)")
+        preferences.sectionArrangement = arrangement
         rebuildTiles()
     }
 

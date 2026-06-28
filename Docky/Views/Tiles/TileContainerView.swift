@@ -1503,7 +1503,19 @@ struct TileContainerView: View {
             Self.logger.info(
                 "Drag ended with collected apps tile=\(tileLogDescription(tile), privacy: .public) additionalTileIDs=\(self.draggedAdditionalTileIDs.joined(separator: ","), privacy: .public)"
             )
+        } else if (isPinnedReorderable(tileID: tile.id) || isTrailingReorderable(tileID: tile.id)),
+                  translationMagnitude >= effectiveTileSize * 0.5,
+                  isPointInRunningDropRegion(projected(point: value.location)) {
+            // Goal 1 "drag anything anywhere": a pinned/trailing icon dropped in the
+            // middle (running) region. Record a section override so it renders in the
+            // middle while keeping its identity (DockSectionArrangement.reconcile
+            // honours it on the next rebuild).
+            Self.logger.info(
+                "Drag placing tile into running section tile=\(tileLogDescription(tile), privacy: .public)"
+            )
+            store.placeTile(tileID: tile.id, inSection: "running", atIndex: Int.max)
         } else if isPinnedReorderable(tileID: tile.id) {
+            store.clearSectionOverride(tileID: tile.id)
             if let destinationIndex = draggedTrailingTileDestinationIndex,
                let trailingItem = draggedTile.flatMap(store.makeTrailingItem(from:)) {
                 Self.logger.info(
@@ -1521,6 +1533,7 @@ struct TileContainerView: View {
                 }
             }
         } else if isTrailingReorderable(tileID: tile.id) {
+            store.clearSectionOverride(tileID: tile.id)
             if let destinationIndex = draggedPinnedTileDestinationIndex,
                let pinnedItem = draggedTile.flatMap(store.makePinnedItem(from:)) {
                 Self.logger.info(

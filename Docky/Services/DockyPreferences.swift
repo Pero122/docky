@@ -2236,6 +2236,17 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Per-section override of tile placement for "drag anything anywhere":
+    /// `sectionID -> ordered tileIDs the user has explicitly placed in it`.
+    /// Empty = pure default-by-tag grouping. Consumed by
+    /// `DockSectionArrangement.reconcile` in `TileStore.rebuildTiles`.
+    var sectionArrangement: [String: [String]] {
+        didSet {
+            guard sectionArrangement != oldValue else { return }
+            defaults.set(sectionArrangement, forKey: Keys.sectionArrangement)
+        }
+    }
+
     /// Whether opened apps from an app folder should appear grouped beside that folder.
     var showsGroupedOpenedAppsInDock: Bool {
         didSet {
@@ -3514,6 +3525,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let startMenuIconPaddingFraction = "docky.startMenuIconPaddingFraction"
         static let hiddenAppBundleIdentifiers = "docky.hiddenAppBundleIdentifiers"
         static let runningOrder = "docky.runningOrder"
+        static let sectionArrangement = "docky.sectionArrangement"
         static let showsGroupedOpenedAppsInDock = "docky.showsGroupedOpenedAppsInDock"
         static let showsGroupedOpenedAppsBackdrop = "docky.showsGroupedOpenedAppsBackdrop"
         static let enablesLaunchpadOverlay = "docky.enablesLaunchpadOverlay"
@@ -3620,6 +3632,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let startMenuIconPaddingFraction: CGFloat? = nil
         static let hiddenAppBundleIdentifiers: [String] = []
         static let runningOrder: [String] = []
+        static let sectionArrangement: [String: [String]] = [:]
         static let showsGroupedOpenedAppsInDock = true
         static let showsGroupedOpenedAppsBackdrop = true
         static let enablesLaunchpadOverlay = true
@@ -3749,6 +3762,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         let storedStartMenuIconPaddingFraction = defaults.object(forKey: Keys.startMenuIconPaddingFraction) as? Double
         let storedHiddenAppBundleIdentifiers = defaults.stringArray(forKey: Keys.hiddenAppBundleIdentifiers)
         let storedRunningOrder = defaults.stringArray(forKey: Keys.runningOrder)
+        let storedSectionArrangement = defaults.dictionary(forKey: Keys.sectionArrangement) as? [String: [String]]
         let storedShowsGroupedOpenedAppsInDock = defaults.object(forKey: Keys.showsGroupedOpenedAppsInDock) as? Bool
         let storedShowsGroupedOpenedAppsBackdrop = defaults.object(forKey: Keys.showsGroupedOpenedAppsBackdrop) as? Bool
         let storedEnablesLaunchpadOverlay = defaults.object(forKey: Keys.enablesLaunchpadOverlay) as? Bool
@@ -3879,6 +3893,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
             ?? DefaultValues.launchpadIconPaddingFraction
         self.hiddenAppBundleIdentifiers = Self.normalizedBundleIdentifiers(storedHiddenAppBundleIdentifiers ?? DefaultValues.hiddenAppBundleIdentifiers)
         self.runningOrder = storedRunningOrder ?? DefaultValues.runningOrder
+        self.sectionArrangement = storedSectionArrangement ?? DefaultValues.sectionArrangement
         self.showsGroupedOpenedAppsInDock = storedShowsGroupedOpenedAppsInDock ?? DefaultValues.showsGroupedOpenedAppsInDock
         self.showsGroupedOpenedAppsBackdrop = storedShowsGroupedOpenedAppsBackdrop ?? DefaultValues.showsGroupedOpenedAppsBackdrop
         self.enablesLaunchpadOverlay = storedEnablesLaunchpadOverlay ?? DefaultValues.enablesLaunchpadOverlay
@@ -4189,6 +4204,7 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         startMenuIconPaddingFraction = DefaultValues.startMenuIconPaddingFraction
         hiddenAppBundleIdentifiers = DefaultValues.hiddenAppBundleIdentifiers
         runningOrder = DefaultValues.runningOrder
+        sectionArrangement = DefaultValues.sectionArrangement
         showsGroupedOpenedAppsInDock = DefaultValues.showsGroupedOpenedAppsInDock
         showsGroupedOpenedAppsBackdrop = DefaultValues.showsGroupedOpenedAppsBackdrop
         enablesLaunchpadOverlay = DefaultValues.enablesLaunchpadOverlay
