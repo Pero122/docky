@@ -44,6 +44,7 @@ struct DockEditPaletteDrag: Equatable {
 
 enum DockEditDropSection: Equatable {
     case pinned
+    case running
     case trailing
 }
 
