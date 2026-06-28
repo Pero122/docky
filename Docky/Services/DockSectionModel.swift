@@ -101,6 +101,55 @@ enum DockSectionArrangement {
         return result
     }
 
+    /// Reconciles a user's saved arrangement against the freshly-computed default
+    /// sections (membership derived from app state each rebuild). This is the
+    /// source-of-truth bridge for "drag anything anywhere": a tile placed by the
+    /// user in `saved[sectionID]` renders in THAT section (a cross-section move
+    /// that sticks), regardless of which group it defaults to; everything else
+    /// stays in its default section. Within a section, user-placed tiles come
+    /// first in saved order, then the remaining default tiles in default order.
+    /// Saved entries for tiles that no longer exist (quit apps, removed pins) are
+    /// ignored, and an empty `saved` returns the defaults unchanged (parity).
+    static func reconcile(defaults: [DockSection], saved: [String: [String]]) -> [DockSection] {
+        let existing = Set(defaults.flatMap(\.tileIDs))
+
+        // A tile's user placement: the first default section whose saved list
+        // names it (iterating in section order keeps this deterministic). Only
+        // existing tiles and real sections participate, so stale/invalid saved
+        // entries are silently dropped.
+        var placement: [String: String] = [:]
+        for section in defaults {
+            guard let savedList = saved[section.id] else { continue }
+            for tileID in savedList where existing.contains(tileID) && placement[tileID] == nil {
+                placement[tileID] = section.id
+            }
+        }
+
+        var defaultSection: [String: String] = [:]
+        for section in defaults {
+            for tileID in section.tileIDs { defaultSection[tileID] = section.id }
+        }
+        func targetSection(of tileID: String) -> String? { placement[tileID] ?? defaultSection[tileID] }
+
+        return defaults.map { section in
+            var ordered: [String] = []
+            var seen = Set<String>()
+            // 1. User-placed tiles for this section, in saved order.
+            for tileID in saved[section.id] ?? []
+            where existing.contains(tileID) && targetSection(of: tileID) == section.id && seen.insert(tileID).inserted {
+                ordered.append(tileID)
+            }
+            // 2. Tiles that default here and aren't placed elsewhere, in default order.
+            for tileID in section.tileIDs
+            where targetSection(of: tileID) == section.id && seen.insert(tileID).inserted {
+                ordered.append(tileID)
+            }
+            var result = section
+            result.tileIDs = ordered
+            return result
+        }
+    }
+
     /// Flattens the sections into the final ordered tile-id list, inserting a
     /// section's `leadingDividerID` before it only when it is non-empty AND some
     /// earlier section already contributed tiles — so empty groups (and the

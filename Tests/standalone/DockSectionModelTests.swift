@@ -80,6 +80,24 @@ enum DockSectionModelTests {
             "leading group emits no divider even when it carries one"
         )
 
+        // 9. reconcile: an empty saved arrangement returns the defaults unchanged (parity).
+        check(DockSectionArrangement.reconcile(defaults: s, saved: [:]) == s, "reconcile empty saved = defaults unchanged")
+
+        // 10. reconcile: a cross-section placement sticks (drag-anywhere) — placed tile leads its new section.
+        let xMove = DockSectionArrangement.reconcile(defaults: s, saved: ["running": ["pinned:A"]])
+        check(xMove.first(where: { $0.id == "pinned" })?.tileIDs == ["pinned:B"], "reconcile: placed tile leaves its default section")
+        check(xMove.first(where: { $0.id == "running" })?.tileIDs == ["pinned:A", "running:X"], "reconcile: placed tile leads the target section, defaults follow")
+
+        // 11. reconcile: saved order reorders tiles within their own section.
+        let reorder = DockSectionArrangement.reconcile(defaults: s, saved: ["pinned": ["pinned:B", "pinned:A"]])
+        check(reorder.first(where: { $0.id == "pinned" })?.tileIDs == ["pinned:B", "pinned:A"], "reconcile: saved order reorders within a section")
+
+        // 12. reconcile: a saved entry for a tile that no longer exists is ignored.
+        check(DockSectionArrangement.reconcile(defaults: s, saved: ["running": ["ghost:Z"]]) == s, "reconcile: stale saved tile ignored")
+
+        // 13. reconcile: a saved entry under an unknown section id is ignored.
+        check(DockSectionArrangement.reconcile(defaults: s, saved: ["nonexistent": ["pinned:A"]]) == s, "reconcile: unknown section id ignored")
+
         if failures == 0 {
             print("DockSectionModelTests: all passed ✅")
         } else {
