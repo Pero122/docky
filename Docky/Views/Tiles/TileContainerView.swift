@@ -29,6 +29,7 @@ struct TileContainerView: View {
     @State private var draggedTileOffset: CGFloat = 0
     @State private var draggedTileInitialFrame: CGRect?
     @State private var draggedPinnedTileDestinationIndex: Int?
+    @State private var draggedRunningTileDestinationIndex: Int?
     @State private var draggedTrailingTileDestinationIndex: Int?
     @State private var draggedAppFolderTargetTileID: String?
     @State private var draggedTrashTargetTileID: String?
@@ -339,7 +340,17 @@ struct TileContainerView: View {
                 continue
             }
 
+            if tile.id == "divider:running" {
+                // Render the running (middle) group from its reorder preview so a
+                // drag animates in place; the individual running tiles below are
+                // skipped here. Widgets in this section still append via the loop.
+                result.append(tile)
+                result.append(contentsOf: previewRunningBaseTiles)
+                continue
+            }
+
             if isPinnedReorderable(tileID: tile.id)
+                || isRunningReorderable(tileID: tile.id)
                 || isTrailingReorderable(tileID: tile.id) {
                 continue
             }
@@ -381,6 +392,29 @@ struct TileContainerView: View {
 
     private var trailingTileIDs: [String] {
         trailingTiles.map(\.id)
+    }
+
+    private var runningTiles: [Tile] {
+        store.tiles.filter { isRunningReorderable(tileID: $0.id) }
+    }
+
+    private var runningTileIDs: [String] {
+        runningTiles.map(\.id)
+    }
+
+    /// Running tiles with the dragged tile moved to its live drop slot, so the
+    /// middle group animates during a reorder just like the pinned group.
+    private var previewRunningBaseTiles: [Tile] {
+        var tiles = runningTiles
+        guard let destinationIndex = draggedRunningTileDestinationIndex,
+              let draggedTile,
+              isRunningReorderable(tileID: draggedTile.id) else {
+            return tiles
+        }
+        tiles.removeAll { $0.id == draggedTile.id }
+        let clampedIndex = min(max(destinationIndex, 0), tiles.count)
+        tiles.insert(draggedTile, at: clampedIndex)
+        return tiles
     }
 
     private var previewPinnedTiles: [Tile] {
@@ -1176,6 +1210,12 @@ struct TileContainerView: View {
         store.isTrailingReorderable(tileID: tileID)
     }
 
+    /// Running (unpinned) app tiles use ids of the form `running:<bundle>` and
+    /// can be drag-reordered in place; the order is persisted by TileStore.
+    private func isRunningReorderable(tileID: String) -> Bool {
+        tileID.hasPrefix("running:")
+    }
+
     private func isTileDraggable(_ tile: Tile) -> Bool {
         // Inline children of an app folder (rendered next to the folder
         // tile in inline / grouped-opened modes) are derived from the
@@ -1356,6 +1396,7 @@ struct TileContainerView: View {
             draggedAdditionalTileIDs = []
             draggedTileInitialFrame = tileFrames[tile.id]
             draggedPinnedTileDestinationIndex = isPinnedReorderable(tileID: tile.id) ? pinnedTileIDs.firstIndex(of: tile.id) : nil
+            draggedRunningTileDestinationIndex = isRunningReorderable(tileID: tile.id) ? runningTileIDs.firstIndex(of: tile.id) : nil
             draggedTrailingTileDestinationIndex = isTrailingReorderable(tileID: tile.id) ? trailingTileIDs.firstIndex(of: tile.id) : nil
             // Drag wins over hover/widget previews — they'd block the cursor
             // and confuse the reorder animation otherwise.
@@ -1387,6 +1428,7 @@ struct TileContainerView: View {
             draggedAppFolderTargetTileID = groupTargetTileID
             draggedTrashTargetTileID = nil
             draggedPinnedTileDestinationIndex = nil
+            draggedRunningTileDestinationIndex = nil
             draggedTrailingTileDestinationIndex = nil
             editMode.paletteDropDestination = nil
             return
@@ -1401,6 +1443,7 @@ struct TileContainerView: View {
             draggedTrashTargetTileID = trashTargetTileID
             draggedAppFolderTargetTileID = nil
             draggedPinnedTileDestinationIndex = nil
+            draggedRunningTileDestinationIndex = nil
             draggedTrailingTileDestinationIndex = nil
             editMode.paletteDropDestination = nil
             return
@@ -1420,7 +1463,8 @@ struct TileContainerView: View {
             isPinnedSource: isPinnedReorderable(tileID: tile.id),
             isTrailingSource: isTrailingReorderable(tileID: tile.id),
             canDropIntoPinned: canDropInPinnedSection(tile),
-            canDropIntoTrailing: canDropInTrailingSection(tile)
+            canDropIntoTrailing: canDropInTrailingSection(tile),
+            canDropIntoRunning: isRunningReorderable(tileID: tile.id)
         )
     }
 
@@ -1494,15 +1538,22 @@ struct TileContainerView: View {
                 }
             }
         } else if let bundleIdentifier = draggedBundleIdentifier {
-            // Running (unpinned) app: dragging it is a "keep it here" gesture,
-            // like the macOS Dock. Pin it at the drop position so it sticks and
-            // becomes freely reorderable afterwards. When the pointer was over the
-            // pinned region we already have an index; otherwise — the common case,
-            // dropping over the running apps, which sit right of the pinned section
-            // and aren't themselves a drop region — fall back to the slot nearest
-            // the drop point (which lands at the end of the pinned section). Gate
-            // on a deliberate drag so a slightly-jiggled click doesn't pin the app.
-            if translationMagnitude >= effectiveTileSize * 0.5 {
+            if draggedRunningTileDestinationIndex != nil {
+                // Dropped within the running (middle) group → reorder it in place
+                // (persisted), like the pinned/trailing groups. Dropping over the
+                // pinned/trailing regions clears this index and falls through to
+                // pinning below (drag a running app left to "keep"/pin it).
+                let finalRunningTileIDs = previewRunningBaseTiles.map(\.id)
+                Self.logger.info(
+                    "Drag reordering running tile=\(tileLogDescription(tile), privacy: .public) finalRunningIDs=\(finalRunningTileIDs.joined(separator: ","), privacy: .public)"
+                )
+                if finalRunningTileIDs != runningTileIDs {
+                    store.setRunningTileOrder(ids: finalRunningTileIDs)
+                }
+            } else if translationMagnitude >= effectiveTileSize * 0.5 {
+                // Running app dragged onto the pinned section (off the running
+                // group): "keep it here" like the macOS Dock — pin it at the drop
+                // position. Gate on a deliberate drag so a jiggled click doesn't pin.
                 let destinationIndex = draggedPinnedTileDestinationIndex
                     ?? pinDropIndex(at: value.location, excluding: tile.id)
                 Self.logger.info(
@@ -1563,6 +1614,7 @@ struct TileContainerView: View {
         draggedAppFolderTargetTileID = nil
         draggedTrashTargetTileID = nil
         draggedPinnedTileDestinationIndex = nil
+        draggedRunningTileDestinationIndex = nil
         draggedTrailingTileDestinationIndex = nil
         editMode.paletteDropDestination = nil
     }
@@ -1587,7 +1639,8 @@ struct TileContainerView: View {
         isPinnedSource: Bool,
         isTrailingSource: Bool,
         canDropIntoPinned: Bool,
-        canDropIntoTrailing: Bool
+        canDropIntoTrailing: Bool,
+        canDropIntoRunning: Bool
     ) {
         if canDropIntoPinned && isPointInPinnedDropRegion(positionValue) {
             if draggedPinnedTileDestinationIndex == nil || draggedTrailingTileDestinationIndex != nil {
@@ -1602,6 +1655,21 @@ struct TileContainerView: View {
                         "Drag clearing trailing preview sourceTileID=\(sourceTileID, privacy: .public) because pointer entered pinned region"
                     )
                 }
+                draggedTrailingTileDestinationIndex = nil
+                draggedRunningTileDestinationIndex = nil
+            }
+            return
+        }
+
+        if canDropIntoRunning && isPointInRunningDropRegion(positionValue) {
+            if draggedRunningTileDestinationIndex == nil {
+                Self.logger.debug(
+                    "Drag entered running region sourceTileID=\(sourceTileID, privacy: .public) position=\(positionValue, privacy: .public)"
+                )
+            }
+            updateDropDestination(for: .running, at: positionValue, sourceTileID: sourceTileID, isTileDrag: isTileDrag)
+            if isTileDrag {
+                draggedPinnedTileDestinationIndex = nil
                 draggedTrailingTileDestinationIndex = nil
             }
             return
@@ -1621,17 +1689,19 @@ struct TileContainerView: View {
                     )
                 }
                 draggedPinnedTileDestinationIndex = nil
+                draggedRunningTileDestinationIndex = nil
             }
             return
         }
 
-        if draggedPinnedTileDestinationIndex != nil || draggedTrailingTileDestinationIndex != nil {
+        if draggedPinnedTileDestinationIndex != nil || draggedTrailingTileDestinationIndex != nil || draggedRunningTileDestinationIndex != nil {
             Self.logger.debug(
                 "Drag left drop regions sourceTileID=\(sourceTileID, privacy: .public) position=\(positionValue, privacy: .public) pinnedSource=\(isPinnedSource, privacy: .public) trailingSource=\(isTrailingSource, privacy: .public)"
             )
         }
         if isTileDrag {
             draggedPinnedTileDestinationIndex = nil
+            draggedRunningTileDestinationIndex = nil
         }
         if isTileDrag {
             draggedTrailingTileDestinationIndex = nil
@@ -1745,7 +1815,8 @@ struct TileContainerView: View {
             isPinnedSource: false,
             isTrailingSource: false,
             canDropIntoPinned: Self.makePinnedItem(from: paletteDrag) != nil,
-            canDropIntoTrailing: Self.makeTrailingItem(from: paletteDrag) != nil
+            canDropIntoTrailing: Self.makeTrailingItem(from: paletteDrag) != nil,
+            canDropIntoRunning: false
         )
     }
 
@@ -1799,6 +1870,21 @@ struct TileContainerView: View {
         tileFrames.keys.contains("divider:running") ? "divider:running" : "divider:trailing"
     }
 
+    /// The running (middle) group's reorder region: from the running divider's
+    /// trailing edge up to the trailing divider's leading edge. Only present when
+    /// the active-pinned separator is shown (otherwise running apps merge into the
+    /// pinned section and there is no distinct middle group).
+    private func isPointInRunningDropRegion(_ positionValue: CGFloat) -> Bool {
+        guard let runningDividerFrame = tileFrames["divider:running"],
+              let trailingDividerFrame = tileFrames["divider:trailing"] else {
+            return false
+        }
+
+        let lowerBound = projected(point: runningDividerFrame.origin) + projected(size: runningDividerFrame.size)
+        let upperBound = projected(point: trailingDividerFrame.origin)
+        return positionValue >= lowerBound && positionValue <= upperBound
+    }
+
     private func isPointInTrailingDropRegion(_ positionValue: CGFloat) -> Bool {
         guard let dividerFrame = tileFrames["divider:trailing"],
               let lastTrailingTileID = previewTrailingTiles.last?.id,
@@ -1815,6 +1901,8 @@ struct TileContainerView: View {
         switch section {
         case .pinned:
             previewPinnedBaseTiles
+        case .running:
+            previewRunningBaseTiles
         case .trailing:
             previewTrailingTiles
         }
@@ -1824,6 +1912,7 @@ struct TileContainerView: View {
         if isTileDrag {
             return switch section {
             case .pinned: draggedPinnedTileDestinationIndex
+            case .running: draggedRunningTileDestinationIndex
             case .trailing: draggedTrailingTileDestinationIndex
             }
         }
@@ -1839,6 +1928,8 @@ struct TileContainerView: View {
             switch section {
             case .pinned:
                 draggedPinnedTileDestinationIndex = index
+            case .running:
+                draggedRunningTileDestinationIndex = index
             case .trailing:
                 draggedTrailingTileDestinationIndex = index
             }
@@ -1887,6 +1978,8 @@ struct TileContainerView: View {
         switch section {
         case .pinned:
             return "pinned"
+        case .running:
+            return "running"
         case .trailing:
             return "trailing"
         }
@@ -2153,6 +2246,10 @@ struct TileContainerView: View {
         case .pinned:
             let insertionIndex = previewTiles.firstIndex(where: { $0.id == "divider:trailing" }) ?? previewTiles.count
             previewTiles.insert(previewTile, at: insertionIndex)
+        case .running:
+            // Palette drops never target the running group (running tiles are
+            // live apps, not palette items) — nothing to preview here.
+            break
         case .trailing:
             let insertionIndex = min(
                 max(0, (previewTiles.firstIndex(where: { $0.id == "divider:trailing" }) ?? (previewTiles.count - 1)) + 1),

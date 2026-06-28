@@ -45,6 +45,11 @@ run_case "WindowMoveGeometry" \
     "$ROOT/Docky/Services/WindowMoveGeometry.swift" \
     "$ROOT/Tests/standalone/WindowMoveGeometryTests.swift"
 
+# RunningTileOrder — reorderable running (middle) group ordering.
+run_case "RunningTileOrder" \
+    "$ROOT/Docky/Services/RunningTileOrder.swift" \
+    "$ROOT/Tests/standalone/RunningTileOrderTests.swift"
+
 if [ "$fail" -eq 0 ]; then
     echo "All standalone tests passed ✅"
 else

@@ -2489,7 +2489,35 @@ final class TileStore: ObservableObject {
             }
         }
 
-        return survived
+        // Apply the user's saved running order so the running group keeps a
+        // stable, drag-reorderable arrangement (remembered across quit/relaunch).
+        let survivingBundles = survived.map(\.bundleIdentifier)
+        let remembered = RunningTileOrder.remember(running: survivingBundles, saved: preferences.runningOrder)
+        if remembered != preferences.runningOrder {
+            preferences.runningOrder = remembered
+        }
+        let arranged = RunningTileOrder.arrange(running: survivingBundles, saved: preferences.runningOrder)
+        let byBundle = Dictionary(survived.map { ($0.bundleIdentifier, $0) }, uniquingKeysWith: { first, _ in first })
+        return arranged.compactMap { byBundle[$0] }
+    }
+
+    /// Reorders the running (unpinned) app group to match the dragged tile order.
+    /// `ids` are running tile ids (`running:<bundle>`); mirrors
+    /// `setPinnedTileOrder` / `setTrailingTileOrder` for the middle group.
+    func setRunningTileOrder(ids: [String]) {
+        let newRunningOrder = ids.compactMap { Self.runningBundleIdentifier(fromTileID: $0) }
+        guard !newRunningOrder.isEmpty else { return }
+        let updated = RunningTileOrder.applyReorder(newRunningOrder: newRunningOrder, saved: preferences.runningOrder)
+        guard updated != preferences.runningOrder else { return }
+        TileStore.logger.info("setRunningTileOrder applying reorder count=\(newRunningOrder.count)")
+        preferences.runningOrder = updated
+        rebuildTiles()
+    }
+
+    nonisolated private static func runningBundleIdentifier(fromTileID tileID: String) -> String? {
+        let prefix = "running:"
+        guard tileID.hasPrefix(prefix) else { return nil }
+        return String(tileID.dropFirst(prefix.count))
     }
 
     private static func bundleIdentifiers(in tiles: [Tile]) -> Set<String> {

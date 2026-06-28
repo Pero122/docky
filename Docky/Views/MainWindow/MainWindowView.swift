@@ -493,6 +493,9 @@ final class ClickThroughHostingView: NSHostingView<MainWindowView> {
                 guard let item = TileContainerView.makePinnedItem(from: paletteDrag) else { return false }
                 TileStore.shared.insertPinnedItem(item, at: destination.index)
                 return true
+            case .running:
+                // Palette items never drop into the running group (it holds live apps).
+                return false
             case .trailing:
                 guard let item = TileContainerView.makeTrailingItem(from: paletteDrag) else { return false }
                 TileStore.shared.insertTrailingItem(item, at: destination.index)
