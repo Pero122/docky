@@ -519,6 +519,36 @@ final class WorkspaceService: ObservableObject {
         return best?.screen ?? NSScreen.main
     }
 
+    /// Moves `window` onto `targetScreen`, keeping its size and placing it at the
+    /// same proportional position it had on its current screen (like Hammerspoon's
+    /// `window:moveToScreen`). Clamped to the destination's visible frame so it
+    /// can't land under the menu bar or off-screen. No-op when the window is
+    /// already on that screen. Used by the dock window previews: clicking a
+    /// preview pulls that window onto the screen whose dock you clicked.
+    @discardableResult
+    func moveWindow(_ window: AppWindow, toScreen targetScreen: NSScreen) -> Bool {
+        guard let source = currentScreen(for: window) else { return false }
+        if source === targetScreen { return true }
+        guard let axFrame = window.frame,
+              let primaryHeight = NSScreen.screens.first?.frame.height else { return false }
+
+        // Current window frame in NSScreen (bottom-left) space.
+        let nsFrame = CGRect(
+            x: axFrame.minX,
+            y: primaryHeight - axFrame.maxY,
+            width: axFrame.width,
+            height: axFrame.height
+        )
+
+        let target = WindowMoveGeometry.targetFrame(
+            windowFrame: nsFrame,
+            from: source.frame,
+            to: targetScreen.frame,
+            visible: targetScreen.visibleFrame
+        )
+        return resize(window, toNSFrame: target)
+    }
+
     private func openApplication(at appURL: URL) {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true

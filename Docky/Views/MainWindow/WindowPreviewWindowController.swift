@@ -228,8 +228,16 @@ final class WindowPreviewWindowController: NSWindowController, ObservableObject 
 
     /// Tap-to-confirm: tear down the preview and focus the chosen window.
     func confirm(_ window: AppWindow) {
+        // Capture the click location before dismissing — that's the screen the
+        // user wants this window on (the dock/preview they clicked).
+        let clickLocation = NSEvent.mouseLocation
         dismissCurrent()
         _ = WorkspaceService.shared.focus(window: window)
+        // Pull the focused window onto the screen under the cursor — a per-window
+        // equivalent of the user's Hammerspoon Ctrl-F1/F2 move-to-screen.
+        if let targetScreen = NSScreen.screens.first(where: { $0.frame.contains(clickLocation) }) {
+            WorkspaceService.shared.moveWindow(window, toScreen: targetScreen)
+        }
     }
 
     var isShowing: Bool { window?.isVisible == true }

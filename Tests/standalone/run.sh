@@ -40,6 +40,11 @@ run_case "DockResizeGeometry" \
     "$ROOT/Docky/Services/DockResizeGeometry.swift" \
     "$ROOT/Tests/standalone/DockResizeGeometryTests.swift"
 
+# WindowMoveGeometry — move-window-to-screen (preview-click pull onto a screen).
+run_case "WindowMoveGeometry" \
+    "$ROOT/Docky/Services/WindowMoveGeometry.swift" \
+    "$ROOT/Tests/standalone/WindowMoveGeometryTests.swift"
+
 if [ "$fail" -eq 0 ]; then
     echo "All standalone tests passed ✅"
 else
