@@ -2107,6 +2107,9 @@ struct TileContainerView: View {
         selectedTileIDs: Set<String>,
         selectedBundleIdentifiers: [String]
     ) -> String? {
+        // Folders disabled → never arm a folder drop target, so dropping one
+        // icon onto another just reorders instead of grouping.
+        guard preferences.allowsAppFolders else { return nil }
         let selectedBundleIdentifierSet = Set(selectedBundleIdentifiers)
 
         for tile in previewPinnedBaseTiles where !selectedTileIDs.contains(tile.id) {
