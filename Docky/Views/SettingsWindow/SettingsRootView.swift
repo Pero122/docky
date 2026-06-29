@@ -30,7 +30,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
     case behaviorLaunch
     case behaviorSystemDock
     case permissions
-    case updates
     case feedback
 
     var id: String { rawValue }
@@ -61,7 +60,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorLaunch: "Launch"
         case .behaviorSystemDock: "System Dock"
         case .permissions: "Permissions"
-        case .updates: "Updates"
         case .feedback: "Feedback"
         }
     }
@@ -92,7 +90,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorLaunch: "power"
         case .behaviorSystemDock: "dock.rectangle"
         case .permissions: "lock.shield"
-        case .updates: "arrow.trianglehead.clockwise"
         case .feedback: "envelope"
         }
     }
@@ -123,7 +120,6 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
         case .behaviorLaunch: .green
         case .behaviorSystemDock: .gray
         case .permissions: .red
-        case .updates: .blue
         case .feedback: .orange
         }
     }
@@ -167,8 +163,7 @@ private let settingsSections: [SettingsSection] = [
     SettingsSection(id: "system", title: "System", panes: [
         .behaviorLaunch,
         .behaviorSystemDock,
-        .permissions,
-        .updates
+        .permissions
     ]),
     SettingsSection(id: "support", title: "Support", panes: [
         .feedback
@@ -390,8 +385,6 @@ private struct SettingsDetailView: View {
             BehaviorSettingsView(subsection: .systemDock)
         case .permissions:
             PermissionsSettingsView()
-        case .updates:
-            UpdatesSettingsView()
         case .feedback:
             FeedbackSettingsView()
         }

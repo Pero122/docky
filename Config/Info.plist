@@ -42,15 +42,9 @@
 	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
-	<!-- FORK LOCK: feed URL intentionally emptied. Upstream's appcast points at
-	     getdocky.com, so any update would replace this fork with the official
-	     build. Updates are hard-disabled in AppUpdateService (feed nil + check
-	     veto); this empty value is belt-and-suspenders so the bundle advertises
-	     no upstream feed. -->
-	<key>SUFeedURL</key>
-	<string></string>
-	<key>SUPublicEDKey</key>
-	<string>LfZUqraK4HiOj/+9iztgnWzdQTrC1ccmJPp/Fy/aTPc=</string>
+	<!-- Sparkle auto-update removed in this fork: the framework, the updater
+	     code, and the SUFeedURL/SUPublicEDKey keys are all gone, so the app
+	     cannot self-update (and can never replace itself with upstream). -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
