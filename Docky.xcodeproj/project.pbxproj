@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		11051E012F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 11051E002F929079005CE09D /* Frameworks/MediaRemoteAdapter.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		113717682FA17B980012480C /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 113717672FA17B980012480C /* Sparkle */; };
 		D0C1000C2FA400000000000C /* DockyDockWatchdog.app in Embed Watchdog */ = {isa = PBXBuildFile; fileRef = D0C100012FA4000000000001 /* DockyDockWatchdog.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -71,7 +70,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				113717682FA17B980012480C /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,7 +135,6 @@
 			);
 			name = Docky;
 			packageProductDependencies = (
-				113717672FA17B980012480C /* Sparkle */,
 			);
 			productName = Docky;
 			productReference = 11051DE72F929079005CE09D /* Docky.app */;
@@ -194,7 +191,6 @@
 			mainGroup = 11051DDE2F929079005CE09D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 11051DE82F929079005CE09D /* Products */;
@@ -632,24 +628,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.9.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		113717672FA17B980012480C /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 113717662FA17B980012480C /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 11051DDF2F929079005CE09D /* Project object */;
 }
