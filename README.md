@@ -56,10 +56,15 @@ Everything upstream Docky does ([feature tour below](#inherited-features)), plus
 
 ## Installing
 
-Two ways in: build it yourself, or move a prebuilt app over if the target machine
-has no Xcode.
+There are two ways to get Docky:
 
-### Option A — Build from source
+1. **[Build it from source](#option-1--build-from-source)** — on a Mac with Xcode.
+2. **[Download a prebuilt app from the Releases tab](#option-2--download-from-the-releases-tab)** — no Xcode needed.
+
+Either way the build is **not Apple-notarized**, so macOS warns on first launch —
+see [Opening it past Gatekeeper](#opening-it-past-gatekeeper).
+
+### Option 1 — Build from source
 
 Requirements: **macOS 14+** and **full Xcode 16 or later** (the Command Line Tools
 alone can't build the scheme).
@@ -81,35 +86,48 @@ xcodebuild -scheme Docky -configuration Release \
 The `ARCHS` line is optional — it builds a universal (Apple Silicon + Intel) app,
 handy if you'll copy it to a different Mac. Swift Package dependencies (Sparkle)
 resolve on first build. You can also just open `Docky.xcodeproj` and build the
-`Docky` scheme in Xcode.
+`Docky` scheme in Xcode. Then [install it to `/Applications`](#install-to-applications).
 
-### Option B — No Xcode? Move a prebuilt app over
+### Option 2 — Download from the Releases tab
 
-You can't build this without full Xcode. If the machine you want it on — say a
-work Mac — has no Xcode, build it **once** on a Mac that does, then move the
-finished `Docky.app` across:
+If a Mac has no Xcode (e.g. a work laptop), grab a prebuilt app from the
+[**Releases** tab](https://github.com/Pero122/docky/releases): download the
+`Docky.app` zip, unzip it, and move `Docky.app` into `/Applications`.
 
-- **Easiest:** publish a build as a
-  [GitHub Release](https://github.com/Pero122/docky/releases) (zip `Docky.app`,
-  attach it), then download it on the other machine.
-- **Or copy directly:** AirDrop, `scp`, or a USB stick the built `Docky.app`.
+Releases are built on a Mac that has Xcode and are universal (Apple Silicon +
+Intel). If no release is published yet, build one with Option 1 (or ask the
+maintainer to cut a release).
 
-Build universal (the `ARCHS=…` line above) if the two Macs have different CPUs.
+### Opening it past Gatekeeper
+
+Releases are **ad-hoc / self-signed, not signed with an Apple Developer ID and not
+notarized.** Two things follow from that:
+
+- **Signing it on one Mac does not make it trusted on another.** macOS trust is
+  tied to the signing *certificate*, not to the machine that built it — a
+  self-signed cert only lives in your keychain, so it's unknown everywhere else.
+- **Downloading from Releases also adds the internet quarantine flag**, so
+  Gatekeeper blocks the first launch ("unidentified developer" / "is damaged")
+  regardless of how it was signed.
+
+Open it anyway by clearing quarantine, then launching from `/Applications`:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Docky.app
+open /Applications/Docky.app          # or right-click → Open the first time
+```
 
 > [!CAUTION]
-> The app is ad-hoc signed (no Apple Developer ID), so on a second Mac Gatekeeper
-> blocks the first launch. Clear quarantine and open it manually:
-> ```sh
-> xattr -dr com.apple.quarantine /Applications/Docky.app
-> open /Applications/Docky.app          # or right-click → Open the first time
-> ```
-> A **managed/corporate Mac** may refuse unsigned apps outright via MDM/Gatekeeper
-> policy — if so there's no workaround short of proper Developer-ID notarization.
+> A **managed / corporate Mac** can enforce Gatekeeper via MDM and refuse unsigned
+> apps outright — then there's no bypass. The only way to get a clean, no-warning
+> launch on other Macs is to sign with an **Apple Developer ID** (the $99/yr Apple
+> Developer Program) **and notarize** the build; plain signing isn't enough on
+> modern macOS.
 
-### Put it in place
+### Install to `/Applications`
 
-Install to `/Applications` and run it from there — never from `DerivedData` or a
-temp folder:
+Always run Docky from `/Applications`, never from `DerivedData` or a temp folder.
+From a source build:
 
 ```sh
 cp -R "$(xcodebuild -scheme Docky -showBuildSettings | awk '/BUILT_PRODUCTS_DIR/{print $3}')/Docky.app" /Applications/
@@ -127,8 +145,8 @@ Tip: for stable permission grants across rebuilds, sign with a local self-signed
 cert named `Docky Local Self-Signed`
 (`CODE_SIGN_IDENTITY="Docky Local Self-Signed" CODE_SIGN_STYLE=Manual`) instead of
 ad-hoc — it avoids re-granting Accessibility / Screen Recording on every build.
-(That cert lives in your keychain, so it only helps on the build machine; use
-ad-hoc for copies you'll move elsewhere.)
+(That cert lives in your keychain, so it only helps on the build machine; it does
+**not** make the app trusted on any other Mac.)
 
 Docky needs **Accessibility** and **Screen Recording** permissions; it prompts on
 first launch.
@@ -163,7 +181,7 @@ Auto-update is off in this fork (Sparkle would replace it with the upstream
 build), so you update by hand:
 
 1. **Quit the running Docky first** — otherwise you're copying over a live app.
-2. Rebuild (Option A) or grab the new prebuilt app, re-copy to `/Applications`,
+2. Rebuild (Option 1) or download the new release, re-copy to `/Applications`,
    then `xattr -cr` and `open`.
 3. If a settings change (e.g. a section layout) won't stick, quit Docky before
    editing its `gt.quintero.Docky` defaults — they're cached while it runs.
