@@ -151,29 +151,54 @@ ad-hoc — it avoids re-granting Accessibility / Screen Recording on every build
 Docky needs **Accessibility** and **Screen Recording** permissions; it prompts on
 first launch.
 
-### Make Docky your dock
+### First run — make Docky your dock
 
-To run Docky as a full replacement, hide the built-in macOS Dock so the two don't
-fight for the same screen edge:
+Once Docky is in `/Applications` and open, set it up as a full replacement:
+
+**1. Grant permissions.** On first launch Docky prompts for **Accessibility** and
+**Screen Recording** (System Settings → Privacy & Security). It needs both to
+manage windows and render previews — grant them, then quit and reopen Docky so it
+picks them up.
+
+**2. Hide the built-in macOS Dock** so the two don't fight for the same screen edge:
 
 ```sh
-# Hide the native Dock: push it off-screen with a very long reveal delay
+# Push the native Dock off-screen with a very long reveal delay
 defaults write com.apple.dock autohide -bool true
 defaults write com.apple.dock autohide-delay -float 1000
 killall Dock
 ```
 
-Then in **Docky → Settings** enable **"Open at login"**. Docky manages its own
-login item and removes external ones on launch, so use this toggle rather than
-adding Docky in System Settings.
+**3. Launch at login.** In **Docky → Settings**, enable **"Open at login"**. Docky
+manages its own login item and removes external ones on launch, so use this toggle
+rather than adding Docky in System Settings.
 
-To restore the stock Dock later:
+**4. Leave auto-update off.** This fork ships with Sparkle auto-update disabled on
+purpose — don't re-enable it, or an update will silently install the upstream build
+and wipe the fork's changes. You update by hand (see
+[Updating / reinstalling](#updating--reinstalling)).
+
+**5. (Optional) Stop maximized windows hiding under the dock.** By default a
+maximized window can render beneath the dock. To make Docky reserve space for
+itself instead (needs Accessibility from step 1):
+
+```sh
+defaults write gt.quintero.Docky docky.maximizedWindowBehavior -string resizeWindow
+```
+
+Use `hideDocky` instead of `resizeWindow` to slide the dock off-screen under a
+maximized window (better for games / full-screen apps); reveal it by dwelling at
+the screen edge.
+
+#### Going back to the stock Dock
 
 ```sh
 defaults delete com.apple.dock autohide-delay
 defaults write com.apple.dock autohide -bool false
 killall Dock
 ```
+
+Then quit Docky and turn off its "Open at login" toggle.
 
 ### Updating / reinstalling
 
