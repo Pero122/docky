@@ -61,8 +61,10 @@ There are two ways to get Docky:
 1. **[Build it from source](#option-1--build-from-source)** — on a Mac with Xcode.
 2. **[Download a prebuilt app from the Releases tab](#option-2--download-from-the-releases-tab)** — no Xcode needed.
 
-Either way the build is **not Apple-notarized**, so macOS warns on first launch —
-see [Opening it past Gatekeeper](#opening-it-past-gatekeeper).
+Neither build is Apple-notarized, but that only matters for downloads: **a build
+you compile yourself just launches** — a locally built app isn't quarantined, so
+Gatekeeper never gates it. A **downloaded or copied** release *is* quarantined and
+needs one unlock step — see [Opening a downloaded build](#opening-a-downloaded-build).
 
 ### Option 1 — Build from source
 
@@ -86,7 +88,16 @@ xcodebuild -scheme Docky -configuration Release \
 The `ARCHS` line is optional — it builds a universal (Apple Silicon + Intel) app,
 handy if you'll copy it to a different Mac. Swift Package dependencies (Sparkle)
 resolve on first build. You can also just open `Docky.xcodeproj` and build the
-`Docky` scheme in Xcode. Then [install it to `/Applications`](#install-to-applications).
+`Docky` scheme in Xcode. Then [install it to `/Applications`](#install-to-applications)
+— a locally built app isn't quarantined, so there's no Gatekeeper unlock to do.
+
+> [!NOTE]
+> On a **work / managed Mac**, building locally sidesteps Gatekeeper, but corporate
+> policy can still get in the way: MDM or security agents (Jamf, CrowdStrike, etc.)
+> may block unsigned apps or apps using private system APIs (Docky uses several),
+> and granting **Accessibility** / **Screen Recording** may need admin or be blocked
+> by a PPPC profile. None of that is about signing — it's about how locked-down the
+> machine is.
 
 ### Option 2 — Download from the Releases tab
 
@@ -98,10 +109,11 @@ Releases are built on a Mac that has Xcode and are universal (Apple Silicon +
 Intel). If no release is published yet, build one with Option 1 (or ask the
 maintainer to cut a release).
 
-### Opening it past Gatekeeper
+### Opening a downloaded build
 
-Releases are **ad-hoc / self-signed, not signed with an Apple Developer ID and not
-notarized.** Two things follow from that:
+This applies to **downloaded or copied** builds (the Releases tab, AirDrop, a USB
+stick) — not to an app you compiled locally. Such builds are **ad-hoc / self-signed,
+not signed with an Apple Developer ID and not notarized**, and two things follow:
 
 - **Signing it on one Mac does not make it trusted on another.** macOS trust is
   tied to the signing *certificate*, not to the machine that built it — a
