@@ -86,18 +86,10 @@ xcodebuild -scheme Docky -configuration Release \
 ```
 
 The `ARCHS` line is optional — it builds a universal (Apple Silicon + Intel) app,
-handy if you'll copy it to a different Mac. Swift Package dependencies (Sparkle)
-resolve on first build. You can also just open `Docky.xcodeproj` and build the
-`Docky` scheme in Xcode. Then [install it to `/Applications`](#install-to-applications)
-— a locally built app isn't quarantined, so there's no Gatekeeper unlock to do.
-
-> [!NOTE]
-> On a **work / managed Mac**, building locally sidesteps Gatekeeper, but corporate
-> policy can still get in the way: MDM or security agents (Jamf, CrowdStrike, etc.)
-> may block unsigned apps or apps using private system APIs (Docky uses several),
-> and granting **Accessibility** / **Screen Recording** may need admin or be blocked
-> by a PPPC profile. None of that is about signing — it's about how locked-down the
-> machine is.
+handy if you'll copy it to a different Mac. You can also just open
+`Docky.xcodeproj` and build the `Docky` scheme in Xcode. Then
+[install it to `/Applications`](#install-to-applications) — a locally built app
+isn't quarantined, so there's no Gatekeeper unlock to do.
 
 ### Option 2 — Download from the Releases tab
 
@@ -128,13 +120,6 @@ Open it anyway by clearing quarantine, then launching from `/Applications`:
 xattr -dr com.apple.quarantine /Applications/Docky.app
 open /Applications/Docky.app          # or right-click → Open the first time
 ```
-
-> [!CAUTION]
-> A **managed / corporate Mac** can enforce Gatekeeper via MDM and refuse unsigned
-> apps outright — then there's no bypass. The only way to get a clean, no-warning
-> launch on other Macs is to sign with an **Apple Developer ID** (the $99/yr Apple
-> Developer Program) **and notarize** the build; plain signing isn't enough on
-> modern macOS.
 
 ### Install to `/Applications`
 
