@@ -1,4 +1,4 @@
-README screenshots. Pulled from https://getdocky.com.
+README screenshots.
 
 - logo.png (app icon)
 - hero.jpg

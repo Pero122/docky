@@ -48,11 +48,12 @@ Everything upstream Docky does ([feature tour below](#inherited-features)), plus
   rounded count).
 - **"Allow app folders" toggle.** Turn folders off entirely and dissolve existing
   folders back into individual app tiles.
-- **Security hardening.** Removed the `.dockywidget` native-bundle loader and the
-  `docky://install-widget` deep link — upstream loaded community widget bundles as
-  native code with library validation off, an RCE vector.
-- **Auto-update disabled.** Sparkle auto-update is forced off (the fork's appcast
-  still points at upstream, so an update would silently install the official build).
+- **Security hardening.** Removed the entire external "widget store" — the
+  `.dockywidget` native-bundle loader (which ran community bundles as native code
+  with library validation off, an RCE vector), the `docky://install-widget` deep
+  link, and the upstream marketplace network calls.
+- **No auto-update.** Sparkle is removed entirely — no updater, no upstream appcast
+  — so the fork can never replace itself with the official build.
 
 ## Installing
 
@@ -170,12 +171,7 @@ killall Dock
 manages its own login item and removes external ones on launch, so use this toggle
 rather than adding Docky in System Settings.
 
-**4. Leave auto-update off.** This fork ships with Sparkle auto-update disabled on
-purpose — don't re-enable it, or an update will silently install the upstream build
-and wipe the fork's changes. You update by hand (see
-[Updating / reinstalling](#updating--reinstalling)).
-
-**5. (Optional) Stop maximized windows hiding under the dock.** By default a
+**4. (Optional) Stop maximized windows hiding under the dock.** By default a
 maximized window can render beneath the dock. To make Docky reserve space for
 itself instead (needs Accessibility from step 1):
 
@@ -199,8 +195,7 @@ Then quit Docky and turn off its "Open at login" toggle.
 
 ### Updating / reinstalling
 
-Auto-update is off in this fork (Sparkle would replace it with the upstream
-build), so you update by hand:
+This fork has no auto-update (Sparkle was removed entirely), so you update by hand:
 
 1. **Quit the running Docky first** — otherwise you're copying over a live app.
 2. Rebuild (Option 1) or download the new release, re-copy to `/Applications`,
@@ -265,15 +260,11 @@ fork can also disable folders entirely — see [What this fork adds](#what-this-
 > Dock. Because of this it **cannot be distributed on the Mac App Store** — it is
 > built from source.
 
-## Documentation
-
-- [External widget bundles](docs/external-widgets.md): the `.dockywidget` bundle
-  contract. Note this fork disables runtime loading of these bundles for security.
-
 ## Dependencies
 
-- [Sparkle](https://github.com/sparkle-project/Sparkle): software update
-  framework (BSD 3-Clause). Auto-update is disabled in this fork.
+No Swift Package dependencies (the Sparkle updater was removed). The only bundled
+third-party component is `Frameworks/MediaRemoteAdapter.framework`, a helper for
+reading Now Playing media info.
 
 ## License
 
